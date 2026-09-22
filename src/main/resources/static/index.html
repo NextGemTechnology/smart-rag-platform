@@ -1,0 +1,1924 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enterprise RAG Pipeline Studio</title>
+    <style>
+        :root {
+            /* Ocean Breeze Figma Palette */
+            --primary: #0B3D91;         /* Deep Navy */
+            --primary-dark: #07265E;
+            --primary-light: #164ea8;
+            --secondary: #3BA7F2;       /* Sky Blue */
+            --secondary-dark: #1E90DE;
+            --secondary-light: #61B8F5;
+            --tertiary: #7FE7D6;        /* Mint / Aqua */
+            --tertiary-dark: #5BD1BF;
+            --tertiary-light: #E0FAF5;
+            --bg: #E8F6FF;              /* Ocean Breeze Canvas */
+            --surface: #FFFFFF;
+            --surface-soft: #F0F8FF;
+            --border: #CBE6F8;
+            --text-main: #0B1D42;
+            --text-muted: #536B88;
+
+            /* Neomorphism Soft Dual-Shadows (Light source top-left) */
+            --neo-raised: 8px 8px 18px rgba(166, 196, 224, 0.45), -8px -8px 18px rgba(255, 255, 255, 0.95);
+            --neo-raised-sm: 4px 4px 10px rgba(166, 196, 224, 0.4), -4px -4px 10px rgba(255, 255, 255, 0.9);
+            --neo-raised-pill: 5px 5px 12px rgba(166, 196, 224, 0.45), -5px -5px 12px rgba(255, 255, 255, 0.95);
+            --neo-sunken: inset 4px 4px 8px rgba(166, 196, 224, 0.45), inset -4px -4px 8px rgba(255, 255, 255, 0.95);
+            --neo-sunken-sm: inset 2px 2px 5px rgba(166, 196, 224, 0.4), inset -2px -2px 5px rgba(255, 255, 255, 0.9);
+            --neo-primary-glow: 0 4px 14px rgba(11, 61, 145, 0.25);
+            --neo-secondary-glow: 0 4px 14px rgba(59, 167, 242, 0.35);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+
+        body {
+            background-color: var(--bg) !important;
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            line-height: 1.5;
+        }
+
+        /* ── Neomorphic Header ───────────────────────────────────── */
+        header {
+            background: var(--bg) !important;
+            color: var(--text-main);
+            padding: 14px 32px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(203, 230, 248, 0.6);
+            box-shadow: 0 6px 16px rgba(166, 196, 224, 0.35);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-brand {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            text-decoration: none;
+        }
+
+        .brand-logo {
+            width: 44px;
+            height: 44px;
+            background: linear-gradient(135deg, var(--secondary), var(--tertiary));
+            color: #FFFFFF;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            font-size: 1.3rem;
+            box-shadow: var(--neo-raised-sm);
+        }
+
+        .brand-info h1 {
+            font-size: 1.25rem;
+            font-weight: 800;
+            color: var(--primary);
+            letter-spacing: -0.2px;
+        }
+
+        .brand-info span {
+            font-size: 0.76rem;
+            color: var(--secondary);
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .db-link-btn {
+            background: var(--bg);
+            border: 1px solid rgba(203, 230, 248, 0.8);
+            color: var(--primary) !important;
+            padding: 8px 16px;
+            border-radius: 24px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            box-shadow: var(--neo-raised-pill);
+            transition: all 0.2s ease;
+        }
+
+        .db-link-btn:hover {
+            box-shadow: var(--neo-sunken-sm);
+            color: var(--secondary-dark) !important;
+            transform: translateY(1px);
+        }
+
+        /* ── System Info Bar (Neomorphic Chip Bar) ───────────────── */
+        .sys-info-bar {
+            background: var(--bg);
+            padding: 10px 32px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            flex-wrap: wrap;
+            border-bottom: 1px solid rgba(203, 230, 248, 0.4);
+        }
+
+        .sys-info-chip {
+            background: var(--bg);
+            padding: 6px 14px;
+            border-radius: 20px;
+            box-shadow: var(--neo-raised-pill);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 600;
+        }
+
+        .sys-info-chip strong {
+            color: var(--primary);
+            font-weight: 800;
+        }
+
+        .os-mode-select {
+            background: var(--bg);
+            border: 1px solid rgba(203, 230, 248, 0.8);
+            color: var(--primary);
+            padding: 4px 10px;
+            border-radius: 16px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            cursor: pointer;
+            outline: none;
+            box-shadow: var(--neo-sunken-sm);
+        }
+
+        /* ── System Hardware & Tuning Bar ────────────────────────── */
+        .system-hardware-bar {
+            background: var(--bg);
+            padding: 10px 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+            font-size: 0.85rem;
+            border-bottom: 1px solid rgba(203, 230, 248, 0.5);
+        }
+
+        .hw-controls-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .hw-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .hw-item label {
+            font-weight: 800;
+            color: var(--primary);
+            font-size: 0.8rem;
+            white-space: nowrap;
+        }
+
+        .hw-select {
+            padding: 6px 12px !important;
+            border-radius: 18px !important;
+            border: 1px solid rgba(203, 230, 248, 0.8) !important;
+            font-size: 0.8rem !important;
+            font-weight: 700 !important;
+            color: var(--primary) !important;
+            background: var(--bg) !important;
+            box-shadow: var(--neo-sunken-sm) !important;
+            cursor: pointer;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+
+        .hw-select:focus {
+            border-color: var(--secondary) !important;
+        }
+
+        .btn-tune {
+            background: linear-gradient(135deg, var(--secondary), var(--secondary-dark));
+            color: #FFFFFF !important;
+            border: none;
+            padding: 7px 16px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 800;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: var(--neo-raised-sm), var(--neo-secondary-glow);
+        }
+
+        .btn-tune:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(59, 167, 242, 0.45);
+        }
+
+        .btn-tune:active {
+            box-shadow: var(--neo-sunken-sm);
+            transform: translateY(1px);
+        }
+
+        /* ── Real-Time CPU & Telemetry Badge ─────────────────────── */
+        .telemetry-badge {
+            background: var(--bg);
+            border: 1px solid rgba(203, 230, 248, 0.8);
+            color: var(--primary);
+            padding: 6px 16px;
+            border-radius: 24px;
+            font-size: 0.8rem;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            box-shadow: var(--neo-raised-pill);
+        }
+
+        .pulse-dot {
+            width: 9px;
+            height: 9px;
+            background: var(--tertiary);
+            border-radius: 50%;
+            box-shadow: 0 0 10px var(--tertiary-dark);
+            animation: pulseGlow 2s infinite;
+        }
+
+        @keyframes pulseGlow {
+            0% { transform: scale(0.95); box-shadow: 0 0 4px var(--tertiary); }
+            50% { transform: scale(1.15); box-shadow: 0 0 10px var(--secondary); }
+            100% { transform: scale(0.95); box-shadow: 0 0 4px var(--tertiary); }
+        }
+
+        .cpu-load-chip {
+            background: linear-gradient(135deg, var(--secondary-light), var(--tertiary-light));
+            color: var(--primary);
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 800;
+            box-shadow: var(--neo-sunken-sm);
+        }
+
+        .btn-gc {
+            background: var(--bg);
+            border: 1px solid rgba(203, 230, 248, 0.8);
+            color: var(--secondary-dark);
+            padding: 4px 10px;
+            border-radius: 14px;
+            font-size: 0.74rem;
+            font-weight: 800;
+            cursor: pointer;
+            box-shadow: var(--neo-raised-pill);
+            transition: all 0.2s;
+        }
+
+        .btn-gc:hover {
+            box-shadow: var(--neo-sunken-sm);
+            color: var(--primary);
+        }
+
+        /* ── Navigation Tabs (Neomorphic Pills) ───────────────────── */
+        .app-tabs {
+            background: var(--bg);
+            padding: 12px 32px 4px 32px;
+            display: flex;
+            gap: 12px;
+            overflow-x: auto;
+        }
+
+        .tab-button {
+            background: var(--bg);
+            border: 1px solid rgba(203, 230, 248, 0.6);
+            padding: 10px 22px;
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            cursor: pointer;
+            border-radius: 22px;
+            box-shadow: var(--neo-raised-pill);
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            white-space: nowrap;
+        }
+
+        .tab-button:hover {
+            color: var(--secondary-dark);
+            transform: translateY(-1px);
+        }
+
+        .tab-button.active {
+            color: var(--primary);
+            background: var(--bg);
+            box-shadow: var(--neo-sunken);
+            border-color: rgba(59, 167, 242, 0.6);
+            font-weight: 800;
+        }
+
+        /* ── Workspace & Neomorphic Cards ────────────────────────── */
+        main {
+            flex: 1;
+            max-width: 1240px;
+            width: 100%;
+            margin: 20px auto;
+            padding: 0 24px;
+        }
+
+        .tab-panel {
+            display: none;
+            animation: fadeIn 0.25s ease-in-out;
+        }
+
+        .tab-panel.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .studio-card {
+            background: var(--bg);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+            border-radius: 20px;
+            padding: 28px;
+            box-shadow: var(--neo-raised);
+            margin-bottom: 24px;
+        }
+
+        .card-header-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 22px;
+            border-bottom: 1px solid rgba(203, 230, 248, 0.6);
+            padding-bottom: 16px;
+        }
+
+        .header-title-block h2 {
+            font-size: 1.35rem;
+            font-weight: 800;
+            color: var(--primary);
+            letter-spacing: -0.2px;
+        }
+
+        .header-title-block p {
+            font-size: 0.88rem;
+            color: var(--text-muted);
+            margin-top: 3px;
+        }
+
+        /* ── Partition Lifecycle Banner ──────────────────────────── */
+        .partition-banner {
+            background: var(--bg);
+            border: 1px solid rgba(255, 255, 255, 0.7);
+            border-radius: 18px;
+            padding: 18px 22px;
+            margin-bottom: 22px;
+            box-shadow: var(--neo-sunken);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .partition-steps {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .partition-step-pill {
+            background: var(--bg);
+            border-radius: 14px;
+            padding: 10px 16px;
+            flex: 1;
+            min-width: 200px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            box-shadow: var(--neo-raised-sm);
+        }
+
+        .partition-step-num {
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--secondary), var(--tertiary));
+            color: #FFFFFF;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.78rem;
+            font-weight: 800;
+            flex-shrink: 0;
+            box-shadow: var(--neo-raised-sm);
+        }
+
+        /* ── Suggestion Chips (Neomorphic Pills) ─────────────────── */
+        .chip-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 18px;
+        }
+
+        .prompt-chip {
+            background: var(--bg);
+            border: 1px solid rgba(203, 230, 248, 0.8);
+            color: var(--primary);
+            padding: 8px 18px;
+            border-radius: 20px;
+            font-size: 0.82rem;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: var(--neo-raised-pill);
+            transition: all 0.2s ease;
+        }
+
+        .prompt-chip:hover {
+            box-shadow: var(--neo-sunken-sm);
+            color: var(--secondary-dark);
+            transform: translateY(1px);
+        }
+
+        /* ── Chat Stream (Sunken Well) ───────────────────────────── */
+        .chat-stream-box {
+            background: var(--bg);
+            border-radius: 16px;
+            padding: 24px;
+            min-height: 380px;
+            max-height: 520px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+            margin-bottom: 18px;
+            box-shadow: var(--neo-sunken);
+        }
+
+        .chat-bubble {
+            max-width: 85%;
+            padding: 16px 20px;
+            border-radius: 16px;
+            font-size: 0.94rem;
+            line-height: 1.6;
+        }
+
+        .chat-bubble.user {
+            align-self: flex-end;
+            background: linear-gradient(135deg, var(--secondary), var(--secondary-dark));
+            color: #FFFFFF;
+            border-bottom-right-radius: 4px;
+            box-shadow: var(--neo-raised-sm), var(--neo-secondary-glow);
+        }
+
+        .chat-bubble.bot {
+            align-self: flex-start;
+            background: var(--bg);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+            color: var(--text-main);
+            border-bottom-left-radius: 4px;
+            box-shadow: var(--neo-raised-sm);
+            width: 100%;
+        }
+
+        .citation-tray {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 14px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(203, 230, 248, 0.5);
+        }
+
+        .citation-chip {
+            background: var(--bg);
+            border: 1px solid var(--tertiary);
+            color: var(--primary);
+            padding: 5px 14px;
+            border-radius: 14px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            box-shadow: var(--neo-raised-sm);
+        }
+
+        /* ── Inputs & Action Buttons ─────────────────────────────── */
+        .input-bar {
+            display: flex;
+            gap: 12px;
+        }
+
+        input[type="text"], select {
+            flex: 1;
+            padding: 14px 20px;
+            border: 1px solid rgba(203, 230, 248, 0.8);
+            border-radius: 18px;
+            font-size: 0.95rem;
+            color: var(--text-main);
+            background: var(--bg);
+            box-shadow: var(--neo-sunken);
+            outline: none;
+            transition: all 0.2s ease;
+        }
+
+        input[type="text"]:focus, select:focus {
+            border-color: var(--secondary);
+            box-shadow: var(--neo-sunken), 0 0 0 2px rgba(59, 167, 242, 0.25);
+        }
+
+        .btn-action {
+            padding: 12px 26px;
+            border-radius: 20px;
+            font-weight: 800;
+            font-size: 0.92rem;
+            cursor: pointer;
+            border: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s ease;
+            text-decoration: none;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: #FFFFFF;
+            box-shadow: var(--neo-raised-sm), var(--neo-primary-glow);
+        }
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            transform: translateY(-1px);
+        }
+        .btn-primary:active {
+            box-shadow: var(--neo-sunken-sm);
+            transform: translateY(1px);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, var(--secondary), var(--secondary-dark));
+            color: #FFFFFF;
+            box-shadow: var(--neo-raised-sm), var(--neo-secondary-glow);
+        }
+        .btn-secondary:hover {
+            box-shadow: 0 6px 18px rgba(59, 167, 242, 0.45);
+            transform: translateY(-1px);
+        }
+        .btn-secondary:active {
+            box-shadow: var(--neo-sunken-sm);
+            transform: translateY(1px);
+        }
+
+        .btn-outline {
+            background: var(--bg);
+            border: 1px solid rgba(203, 230, 248, 0.8);
+            color: var(--primary);
+            box-shadow: var(--neo-raised-pill);
+        }
+        .btn-outline:hover {
+            box-shadow: var(--neo-sunken-sm);
+            color: var(--secondary-dark);
+        }
+
+        /* ── Pipeline Stages (Neomorphic Raised Boxes) ───────────── */
+        .pipeline-flow {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .stage-box {
+            background: var(--bg);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+            border-radius: 18px;
+            padding: 22px;
+            transition: all 0.2s ease;
+            box-shadow: var(--neo-raised-sm);
+        }
+
+        .stage-box:hover {
+            box-shadow: var(--neo-raised);
+            transform: translateY(-2px);
+        }
+
+        .stage-badge {
+            display: inline-block;
+            background: var(--secondary);
+            color: #FFFFFF;
+            font-size: 0.72rem;
+            font-weight: 800;
+            padding: 3px 10px;
+            border-radius: 12px;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            box-shadow: var(--neo-raised-sm);
+        }
+
+        .stage-box h3 {
+            font-size: 1.05rem;
+            font-weight: 800;
+            color: var(--primary);
+            margin-bottom: 6px;
+        }
+
+        .stage-box p {
+            font-size: 0.82rem;
+            color: var(--text-muted);
+            margin-bottom: 14px;
+        }
+
+        /* ── KPI Metric Cards (Neomorphic Raised Cards) ──────────── */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .kpi-card {
+            background: var(--bg);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+            border-radius: 18px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: var(--neo-raised-sm);
+        }
+
+        .kpi-number {
+            font-size: 2.2rem;
+            font-weight: 900;
+            color: var(--primary);
+            line-height: 1.1;
+        }
+
+        .kpi-label {
+            font-size: 0.78rem;
+            font-weight: 800;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 6px;
+        }
+
+        /* ── Tables & Lists ──────────────────────────────────────── */
+        .table-wrap {
+            overflow-x: auto;
+            border: 1px solid rgba(203, 230, 248, 0.6);
+            border-radius: 16px;
+            box-shadow: var(--neo-sunken-sm);
+            background: var(--bg);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+            background: transparent;
+        }
+
+        th {
+            background: rgba(203, 230, 248, 0.35);
+            color: var(--primary);
+            font-weight: 800;
+            padding: 14px 16px;
+            border-bottom: 1.5px solid var(--border);
+            text-align: left;
+        }
+
+        td {
+            padding: 14px 16px;
+            border-bottom: 1px solid rgba(203, 230, 248, 0.5);
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover {
+            background: rgba(255, 255, 255, 0.5);
+        }
+
+        .tag-pill {
+            padding: 4px 14px;
+            border-radius: 16px;
+            font-size: 0.78rem;
+            font-weight: 800;
+            display: inline-block;
+            box-shadow: var(--neo-raised-sm);
+        }
+
+        .tag-success {
+            background: var(--tertiary-light);
+            color: #0B3D91;
+            border: 1px solid var(--tertiary);
+        }
+
+        .tag-failed {
+            background: #FEECEB;
+            color: #CF222E;
+            border: 1px solid #FFA19B;
+        }
+
+        /* ── Pipeline Status Dashboard (Neomorphic Container) ───── */
+        #pipeline-status-dashboard {
+            background: var(--bg) !important;
+            border: 1px solid rgba(255, 255, 255, 0.8) !important;
+            border-radius: 18px !important;
+            box-shadow: var(--neo-raised) !important;
+        }
+
+        .stage-status-pill {
+            background: var(--bg);
+            border-radius: 14px;
+            padding: 12px 14px;
+            text-align: center;
+            box-shadow: var(--neo-sunken-sm);
+        }
+
+        .stage-status-name {
+            font-size: 0.72rem;
+            font-weight: 800;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .stage-status-ok {
+            font-size: 1.1rem;
+            font-weight: 900;
+            color: #0A7A66;
+        }
+
+        .stage-status-act {
+            font-size: 0.72rem;
+            color: var(--secondary);
+            font-weight: 700;
+            margin-top: 2px;
+        }
+
+        /* ── Neomorphic Footer ───────────────────────────────────── */
+        footer {
+            background: var(--bg) !important;
+            color: var(--text-muted);
+            border-top: 1px solid rgba(203, 230, 248, 0.6);
+            padding: 22px 32px;
+            margin-top: auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.88rem;
+            box-shadow: 0 -4px 14px rgba(166, 196, 224, 0.25);
+        }
+
+        .footer-nav {
+            display: flex;
+            gap: 22px;
+        }
+
+        .footer-nav a {
+            color: var(--primary) !important;
+            text-decoration: none;
+            font-weight: 700;
+            transition: color 0.2s;
+        }
+
+        .footer-nav a:hover {
+            color: var(--secondary-dark) !important;
+            text-decoration: underline;
+        }
+    </style>
+    <link rel="stylesheet" href="css/layout.css">
+</head>
+<body>
+
+    <!-- LIGHT TOP HEADER -->
+    <header>
+        <div class="header-brand">
+            <div class="brand-logo">⚡</div>
+            <div class="brand-info">
+                <h1>Enterprise RAG Pipeline Studio</h1>
+                <span>8-Core Zero-Copy Ingestion Engine &bull; Spring Boot 3.3</span>
+            </div>
+        </div>
+
+        <div class="header-controls">
+            <!-- Direct Database Links -->
+            <a href="http://localhost:8080/h2-console" target="_blank" class="db-link-btn" title="Open H2 Database Console">
+                🗄️ H2 Database
+            </a>
+            <a href="http://localhost:8080/api/rag/jobs" target="_blank" class="db-link-btn" title="View Document Jobs JSON">
+                📊 DB Records
+            </a>
+            <a href="http://localhost:8005/docs" target="_blank" class="db-link-btn" title="Open ChromaDB Swagger UI">
+                ⚡ ChromaDB (/docs)
+            </a>
+        </div>
+    </header>
+
+    <!-- NAVIGATION TABS -->
+    <nav class="app-tabs">
+        <button class="tab-button active" onclick="activateTab('tab-qa')">💬 RAG Assistant</button>
+        <button class="tab-button" onclick="activateTab('tab-pipeline')">🚀 Ingestion Pipeline</button>
+        <button class="tab-button" onclick="activateTab('tab-vectordb')">🗄️ Vector DB / Chroma</button>
+        <button class="tab-button" onclick="activateTab('tab-search')">🔍 Direct Similarity</button>
+        <button class="tab-button" onclick="activateTab('tab-jobs')">📋 Audit History</button>
+    </nav>
+
+    <!-- MAIN WORKSPACE -->
+    <div class="workspace-layout">
+    <main>
+
+        <!-- TAB 1: RAG DOCUMENT QA -->
+        <section id="tab-qa" class="tab-panel active">
+            <div class="studio-card">
+                <div class="card-header-bar">
+                    <div class="header-title-block">
+                        <h2>Context-Grounded Document QA</h2>
+                        <p>Retrieves vector chunks from ingested legal circulars and synthesizes verified answers with exact citations</p>
+                    </div>
+                </div>
+
+                <!-- One-Click Suggestion Chips -->
+                <div class="chip-container">
+                    <span style="font-size:0.8rem; font-weight:700; color:var(--text-muted); align-self:center;">Try asking:</span>
+                    <button class="prompt-chip" onclick="fillQuery('What is the leave policy entitlement?')">📊 Leave Policy Entitlement</button>
+                    <button class="prompt-chip" onclick="fillQuery('How does the system format tables and markdown?')">📑 Markdown Table Rules</button>
+                    <button class="prompt-chip" onclick="fillQuery('What is the source priority between PDF and MD?')">⚖️ PDF vs MD Priority</button>
+                    <button class="prompt-chip" onclick="fillQuery('Explain the recursive bisection chunking pipeline')">🔄 Recursive Pipeline</button>
+                </div>
+
+                <div class="chat-stream-box" id="chat-stream">
+                    <div class="chat-bubble bot">
+                        <div style="font-weight:800; color:var(--primary); margin-bottom:6px;">RAG Assistant</div>
+                        <div>Welcome! Ask questions across your ingested documents. The assistant retrieves relevant chunks and provides page-level citations.</div>
+                    </div>
+                </div>
+
+                <div class="input-bar">
+                    <input type="text" id="qa-query-input" aria-label="Ask a question" placeholder="Type your question or click a suggestion above..." onkeypress="if(event.key === 'Enter') sendQuestion();">
+                    <select id="qa-topk-select" aria-label="Number of context chunks" style="max-width: 130px;">
+                        <option value="3">Top 3 Chunks</option>
+                        <option value="5" selected>Top 5 Chunks</option>
+                        <option value="10">Top 10 Chunks</option>
+                    </select>
+                    <button class="btn-action btn-primary" id="btn-submit-qa" onclick="sendQuestion()">Ask Query</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 2: INGESTION PIPELINE STUDIO -->
+        <section id="tab-pipeline" class="tab-panel">
+            <div class="studio-card">
+                <div class="card-header-bar">
+                    <div class="header-title-block">
+                        <h2>Parallel Zero-Copy Ingestion Control</h2>
+                        <p>Stream massive PDFs directly through the 3-stage pipeline without heap memory exhaustion</p>
+                    </div>
+                    <button class="btn-action btn-primary" onclick="triggerPipeline('/api/rag/ingest')">⚡ Run Full End-to-End Pipeline</button>
+                </div>
+
+                <!-- Interactive Manual File & Folder Selector -->
+                <div style="background: #F4FAFF; border: 2px dashed var(--secondary); border-radius: 12px; padding: 24px; text-align: center; margin-bottom: 20px;" id="drop-zone">
+                    <div style="font-size: 2rem; margin-bottom: 8px;">📂</div>
+                    <div style="font-size: 1.05rem; font-weight: 800; color: var(--primary); margin-bottom: 6px;">
+                        Select PDF Files or Entire PDF Folder to Ingest
+                    </div>
+                    <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 16px;">
+                        Drag & drop PDF files directly here, or click below to pick individual files or an entire folder
+                    </p>
+
+                    <!-- Hidden native file inputs -->
+                    <input type="file" id="manual-file-input" multiple accept=".pdf" style="display: none;" onchange="handleFilesSelected(this.files)">
+                    <input type="file" id="manual-folder-input" webkitdirectory directory multiple style="display: none;" onchange="handleFilesSelected(this.files)">
+
+                    <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
+                        <button class="btn-action btn-secondary" onclick="document.getElementById('manual-file-input').click()">
+                            📄 Pick PDF Files
+                        </button>
+                        <button class="btn-action btn-outline" onclick="document.getElementById('manual-folder-input').click()">
+                            📁 Pick Entire Folder (All PDFs)
+                        </button>
+                        <button class="btn-action btn-primary" id="btn-upload-ingest" onclick="uploadAndRunPipeline()" style="display: none;">
+                            🚀 Upload & Ingest (<span id="selected-files-count">0</span> files)
+                        </button>
+                    </div>
+
+                    <!-- Selected files preview badge list -->
+                    <div id="selected-files-list" style="margin-top: 14px; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;"></div>
+                </div>
+
+                <div class="source-path" style="margin-bottom: 18px;">
+                    <label style="font-size:0.85rem; font-weight:700; color:var(--text-muted); display:block; margin-bottom:6px;">
+                        Or Specify Local Filesystem Path (Zero-Copy direct NVMe stream):
+                    </label>
+                    <div class="input-bar">
+                        <input type="text" id="pipeline-folder-path" aria-label="Local PDF folder path" placeholder="/absolute/path/to/pdfs (leave empty for default data/raw_pdfs/)">
+                        <button class="btn-action btn-primary" onclick="triggerPipeline('/api/rag/ingest')">⚡ Ingest from Path</button>
+                    </div>
+                </div>
+
+
+                <div class="pipeline-flow">
+                    <div class="stage-box">
+                        <span class="stage-badge">Stage 1</span>
+                        <h3>PDF Streaming</h3>
+                        <p>Apache PDFBox 3.x with TempFileOnlyStreamCache. Flushes page-by-page to Markdown.</p>
+                        <button class="btn-action btn-outline" style="padding:6px 14px; font-size:0.8rem;" onclick="triggerPipeline('/api/rag/parse-only')">Run Parse Only</button>
+                    </div>
+
+                    <div class="stage-box">
+                        <span class="stage-badge">Stage 2</span>
+                        <h3>Semantic Chunker</h3>
+                        <p>Line-streams Markdown, breaks at page markers, and writes page-aware JSONL records.</p>
+                        <button class="btn-action btn-outline" style="padding:6px 14px; font-size:0.8rem;" onclick="triggerPipeline('/api/rag/chunk-only')">Run Chunk Only</button>
+                    </div>
+
+                    <div class="stage-box">
+                        <span class="stage-badge">Stage 3</span>
+                        <h3>Vector Ingestion</h3>
+                        <p>Pushes batch vectors to ChromaDB via HTTP, with zero-copy local fallback persistence.</p>
+                        <button class="btn-action btn-outline" style="padding:6px 14px; font-size:0.8rem;" onclick="triggerPipeline('/api/rag/vectorize-only')">Run Vectorize Only</button>
+                    </div>
+                </div>
+
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-number" id="kpi-files">-</div>
+                        <div class="kpi-label">PDFs Processed</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-number" id="kpi-pages">-</div>
+                        <div class="kpi-label">Pages Extracted</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-number" id="kpi-speed">-</div>
+                        <div class="kpi-label">Pages / Sec</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-number" id="kpi-chunks">-</div>
+                        <div class="kpi-label">RAG Chunks</div>
+                    </div>
+                </div>
+
+                <!-- REAL-TIME PIPELINE STATUS DASHBOARD -->
+                <div id="pipeline-status-dashboard" style="background:#FFFFFF; border:1.5px solid var(--border); border-radius:12px; padding:20px 22px; margin-bottom:20px; box-shadow:var(--shadow-sm);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+                        <strong style="color:var(--primary); font-size:0.95rem;">📊 Live Pipeline Status</strong>
+                        <div style="display:flex; gap:8px; align-items:center;">
+                            <span id="run-id-badge" style="font-size:0.75rem; color:var(--text-muted); font-family:monospace;"></span>
+                            <span id="resource-state-badge" class="tag-pill tag-success">🟢 NORMAL</span>
+                            <button class="btn-action btn-outline" style="padding:5px 12px; font-size:0.78rem;" onclick="resumePipeline()">↺ Resume</button>
+                        </div>
+                    </div>
+
+                    <!-- Stage progress row -->
+                    <div class="stage-progress-grid" style="display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:16px;">
+                        <div id="stage-parse" class="stage-status-pill">
+                            <div class="stage-status-name">PARSE</div>
+                            <div class="stage-status-ok" id="stage-parse-ok">–</div>
+                            <div class="stage-status-act" id="stage-parse-act">–</div>
+                        </div>
+                        <div id="stage-chunk" class="stage-status-pill">
+                            <div class="stage-status-name">CHUNK</div>
+                            <div class="stage-status-ok" id="stage-chunk-ok">–</div>
+                            <div class="stage-status-act" id="stage-chunk-act">–</div>
+                        </div>
+                        <div id="stage-embed" class="stage-status-pill">
+                            <div class="stage-status-name">EMBED</div>
+                            <div class="stage-status-ok" id="stage-embed-ok">–</div>
+                            <div class="stage-status-act" id="stage-embed-act">–</div>
+                        </div>
+                        <div id="stage-store" class="stage-status-pill">
+                            <div class="stage-status-name">STORE</div>
+                            <div class="stage-status-ok" id="stage-store-ok">–</div>
+                            <div class="stage-status-act" id="stage-store-act">–</div>
+                        </div>
+                    </div>
+
+                    <!-- Overall progress bar -->
+                    <div style="background:#E8F6FF; border-radius:8px; height:14px; overflow:hidden; margin-bottom:10px;">
+                        <div id="pipeline-progress-bar" style="background:linear-gradient(90deg,var(--secondary),var(--tertiary)); height:100%; width:0%; transition:width 0.4s ease; border-radius:8px;"></div>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; font-size:0.78rem; color:var(--text-muted); margin-bottom:14px;">
+                        <span id="pipeline-progress-label">No active run</span>
+                        <span id="pipeline-throughput"></span>
+                    </div>
+
+                    <!-- Failed docs list -->
+                    <div id="failed-docs-list" style="display:none; background:#FFF4F4; border:1.5px solid #FFCDD2; border-radius:8px; padding:10px 14px; font-size:0.8rem; color:#B71C1C;"></div>
+
+                    <!-- File Inspect Tool (replaces deleted PdfOptimizationService) -->
+                    <div style="border-top:1px solid var(--border); margin-top:14px; padding-top:14px;">
+                        <div style="font-size:0.82rem; font-weight:700; color:var(--text-muted); margin-bottom:8px;">🔍 Inspect File Metadata (read-only — never modifies original)</div>
+                        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                            <input type="text" id="inspect-file-path" aria-label="PDF path to inspect" placeholder="Absolute path to PDF to inspect..." style="flex:1; min-width:240px; font-size:0.85rem; padding:8px 14px;">
+                            <button class="btn-action btn-outline" style="white-space:nowrap; padding:8px 16px; font-size:0.82rem;" onclick="runInspectFile()">📋 Inspect File</button>
+                        </div>
+                        <div id="inspect-result-box" style="margin-top:10px; display:none; font-size:0.82rem; padding:10px 14px; border-radius:8px; background:#F4FAFF; border:1.5px solid var(--border);"></div>
+                    </div>
+                </div>
+
+                <div id="pipeline-status-text" style="margin-bottom: 12px; font-weight:700;"></div>
+                <pre id="pipeline-output-json" style="background:#F4FAFF; border:1.5px solid var(--border); padding:16px; border-radius:10px; font-size:0.85rem; color:var(--primary); overflow-x:auto;">// Telemetry execution report will appear here...</pre>
+
+                <!-- PARTITION-LEVEL MEMORY CLEARING LIFECYCLE -->
+                <div class="partition-banner">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <strong style="color:var(--primary); font-size:0.92rem;">🧹 Partition RAM Reclamation Lifecycle</strong>
+                        <span class="tag-pill tag-success" id="partition-status-pill">Active &bull; Auto-Reclaims RAM After Each Partition</span>
+                    </div>
+                    <div class="partition-steps">
+                        <div class="partition-step-pill">
+                            <div class="partition-step-num">1</div>
+                            <div>
+                                <div style="font-weight:800; font-size:0.82rem; color:var(--primary);">Partition 1: PDF Parsing</div>
+                                <div style="font-size:0.75rem; color:var(--text-muted);">Streams to Markdown &bull; Heap wiped</div>
+                            </div>
+                        </div>
+                        <div class="partition-step-pill">
+                            <div class="partition-step-num">2</div>
+                            <div>
+                                <div style="font-weight:800; font-size:0.82rem; color:var(--primary);">Partition 2: Chunking</div>
+                                <div style="font-size:0.75rem; color:var(--text-muted);">JSONL output &bull; GC triggered</div>
+                            </div>
+                        </div>
+                        <div class="partition-step-pill">
+                            <div class="partition-step-num">3</div>
+                            <div>
+                                <div style="font-weight:800; font-size:0.82rem; color:var(--primary);">Partition 3: Vector Store</div>
+                                <div style="font-size:0.75rem; color:var(--text-muted);">Pushes to Chroma &bull; RAM cleared</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- TAB 3: VECTOR DB & CHROMA EXPLORER -->
+        <section id="tab-vectordb" class="tab-panel">
+            <div class="studio-card">
+                <div class="card-header-bar">
+                    <div class="header-title-block">
+                        <h2>Vector Database & Chroma Hub</h2>
+                        <p>Live status, collection metadata, and vector records preview</p>
+                    </div>
+                    <button class="btn-action btn-primary" onclick="loadVectorHub()">↻ Refresh Vectors</button>
+                </div>
+
+                <div class="kpi-grid" style="grid-template-columns: repeat(3, 1fr); margin-bottom: 20px;">
+                    <div class="kpi-card">
+                        <div class="kpi-number" id="vdb-status-badge" style="font-size:1.3rem;">Checking...</div>
+                        <div class="kpi-label">ChromaDB Engine</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-number" id="vdb-collection-name" style="font-size:1.3rem;">rag_documents</div>
+                        <div class="kpi-label">Collection Name</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-number" id="vdb-total-vectors">0</div>
+                        <div class="kpi-label">Total Vectors</div>
+                    </div>
+                </div>
+
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Vector Chunk ID</th>
+                                <th>Document</th>
+                                <th>Page</th>
+                                <th>Section Heading</th>
+                                <th>Dimensions</th>
+                                <th>Preview</th>
+                            </tr>
+                        </thead>
+                        <tbody id="vdb-table-body">
+                            <tr><td colspan="6" style="text-align:center; padding:18px;">Click Refresh to load vector records...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 4: DIRECT SIMILARITY SEARCH -->
+        <section id="tab-search" class="tab-panel">
+            <div class="studio-card">
+                <div class="card-header-bar">
+                    <div class="header-title-block">
+                        <h2>Direct Vector Similarity Search</h2>
+                        <p>Search vector embeddings directly using 128-dimensional normalized term frequency hashing</p>
+                    </div>
+                </div>
+
+                <div class="input-bar" style="margin-bottom: 20px;">
+                    <input type="text" id="vector-search-input" aria-label="Search vector chunks" placeholder="Enter keywords or phrases (e.g., 'leave rules', 'circular 1998')..." onkeypress="if(event.key === 'Enter') runSearch();">
+                    <select id="vector-topk-select" aria-label="Number of search results" style="max-width: 130px;">
+                        <option value="3">Top 3</option>
+                        <option value="5" selected>Top 5</option>
+                        <option value="10">Top 10</option>
+                    </select>
+                    <button class="btn-action btn-secondary" onclick="runSearch()">Search Vectors</button>
+                </div>
+
+                <div id="vector-search-results"></div>
+            </div>
+        </section>
+
+        <!-- TAB 5: AUDIT HISTORY -->
+        <section id="tab-jobs" class="tab-panel">
+            <div class="studio-card">
+                <div class="card-header-bar">
+                    <div class="header-title-block">
+                        <h2>Database Audit & Checksum Ledger</h2>
+                        <p>Persisted in H2 / MySQL. Prevents redundant ingestion using SHA-256 deduplication.</p>
+                    </div>
+                    <div class="card-header-actions" style="display:flex; gap:10px;">
+                        <a href="http://localhost:8080/h2-console" target="_blank" class="btn-action btn-outline" style="padding:6px 14px; font-size:0.82rem;">Open H2 SQL Console ↗</a>
+                        <button class="btn-action btn-primary" onclick="loadAuditJobs()" style="padding:6px 14px; font-size:0.82rem;">↻ Refresh</button>
+                    </div>
+                </div>
+
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Filename</th>
+                                <th>Status</th>
+                                <th>Pages</th>
+                                <th>Execution Time</th>
+                                <th>SHA-256 Checksum</th>
+                                <th>Processed At</th>
+                            </tr>
+                        </thead>
+                        <tbody id="audit-table-body">
+                            <tr><td colspan="6" style="text-align:center; padding:18px;">Loading audit logs...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <aside class="system-sidebar" aria-label="System and hardware">
+    <!-- SYSTEM INFO BAR (populated from /api/rag/system-info) -->
+    <div class="sys-info-bar" id="sys-info-bar">
+        <h2 class="sidebar-heading">System overview</h2>
+        <div class="sys-info-chip">🖥️ <span id="sys-os">Detecting OS...</span></div>
+        <div class="sys-info-chip">🏗️ Arch: <strong id="sys-arch">–</strong></div>
+        <div class="sys-info-chip">🧠 CPU: <strong id="sys-cpu">–</strong> cores</div>
+        <div class="sys-info-chip">💾 RAM: <strong id="sys-ram">–</strong> GB</div>
+        <div class="sys-info-chip">🎮 GPU: <strong id="sys-gpu">–</strong></div>
+        <div class="sys-info-chip">☕ Java: <strong id="sys-java">–</strong></div>
+        <div class="sys-info-chip">
+            🌐 OS Mode:
+            <select class="os-mode-select" id="os-mode-select" aria-label="OS Mode" onchange="setOsOverride(this.value)">
+                <option value="AUTO">Auto Detect</option>
+                <option value="WINDOWS">Windows</option>
+                <option value="MACOS">macOS</option>
+                <option value="LINUX">Linux</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- SYSTEM HARDWARE & DYNAMIC TUNING BAR -->
+    <div class="system-hardware-bar">
+        <h2 class="sidebar-heading">Hardware tuning</h2>
+        <div class="hw-controls-group">
+            <div class="hw-item">
+                <label for="hw-preset-select">⚙️ Hardware Preset:</label>
+                <select id="hw-preset-select" class="hw-select" onchange="onPresetChange(this.value)">
+                    <option value="8_4">8 GB RAM / 4 Cores</option>
+                    <option value="8_8" selected>8 GB RAM / 8 Cores (Default)</option>
+                    <option value="16_8">16 GB RAM / 8 Cores</option>
+                    <option value="16_16">16 GB RAM / 16 Cores (High Concurrency)</option>
+                    <option value="32_16">32 GB RAM / 16 Cores (Enterprise Scale)</option>
+                    <option value="custom">Custom Configuration</option>
+                </select>
+            </div>
+            <div class="hw-item">
+                <label for="ram-capacity-select">💾 RAM Capacity:</label>
+                <select id="ram-capacity-select" class="hw-select" onchange="onManualHwChange()">
+                    <option value="4">4 GB RAM</option>
+                    <option value="8" selected>8 GB RAM</option>
+                    <option value="16">16 GB RAM</option>
+                    <option value="32">32 GB RAM</option>
+                    <option value="64">64 GB RAM</option>
+                </select>
+            </div>
+            <div class="hw-item">
+                <label for="cpu-cores-select">🧠 CPU Cores Allocation:</label>
+                <select id="cpu-cores-select" class="hw-select" onchange="onManualHwChange()">
+                    <option value="2">2 Cores</option>
+                    <option value="4">4 Cores</option>
+                    <option value="8" selected>8 Cores</option>
+                    <option value="12">12 Cores</option>
+                    <option value="16">16 Cores</option>
+                    <option value="24">24 Cores</option>
+                    <option value="32">32 Cores</option>
+                </select>
+            </div>
+            <button class="btn-tune" onclick="applyHardwareProfile()" title="Dynamically reconfigure backend thread pool, semaphore permits, and memory ceiling">⚡ Apply Tuning</button>
+        </div>
+
+        <!-- Telemetry Badge + One-Click GC Sweep -->
+        <div class="telemetry-badge" id="telemetry-badge">
+            <span class="pulse-dot"></span>
+            <span id="telemetry-text">Loading hardware metrics...</span>
+            <button class="btn-gc" onclick="runGcSweep()" title="Trigger garbage collection to sweep memory immediately">🧹 Sweep</button>
+        </div>
+    </div>
+
+    </aside>
+    </div>
+
+    <!-- 100% LIGHT FOOTER -->
+    <footer>
+        <div>
+            &copy; 2026 Enterprise RAG Pipeline &bull; Memory-Safe Streaming Architecture
+        </div>
+        <div class="footer-nav">
+            <a href="http://localhost:8080/h2-console" target="_blank">🗄️ H2 Console (jdbc:h2:mem:testdb)</a>
+            <a href="http://localhost:8080/api/rag/jobs" target="_blank">📊 Ingestion Jobs API</a>
+            <a href="http://localhost:8005/docs" target="_blank">⚡ ChromaDB (port 8005)</a>
+            <a href="http://localhost:8080/api/rag/system-metrics" target="_blank">📈 Telemetry API</a>
+        </div>
+    </footer>
+
+    <!-- JAVASCRIPT LOGIC -->
+    <script>
+        const API = (window.location.protocol === 'file:') ? 'http://localhost:8080' : '';
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initHardwareTuning();
+            loadSystemInfo();
+            pollPipelineStatus(); // initial fetch
+            startTelemetryLoop(); // live 3s CPU & memory polling
+        });
+
+        // ── System Info ──────────────────────────────────────────────
+        async function loadSystemInfo() {
+            try {
+                const res = await fetch(`${API}/api/rag/system-info`);
+                if (!res.ok) return;
+                const d = await res.json();
+                document.getElementById('sys-os').textContent = `${d.detectedOs || d.osType || d.os || 'Unknown OS'} (${d.osName || ''})`;
+                document.getElementById('sys-arch').textContent = d.osArch || d.architecture || '–';
+                document.getElementById('sys-cpu').textContent = d.cpuCores || '–';
+                document.getElementById('sys-ram').textContent = d.physicalMemoryMb != null ? Math.round(d.physicalMemoryMb / 1024 * 10) / 10 : (d.physicalMemoryGb || '–');
+                document.getElementById('sys-java').textContent = d.javaVersion || '–';
+                const gpu = d.gpuInfo || d.gpu;
+                document.getElementById('sys-gpu').textContent = (gpu && gpu.name && gpu.name !== 'NONE') ? gpu.name : 'None detected';
+                // Sync OS mode selector if override is active
+                const modeSelect = document.getElementById('os-mode-select');
+                if (modeSelect && d.activeMode && d.activeMode !== d.detectedOs) modeSelect.value = d.activeMode;
+            } catch (e) {
+                console.warn('System info fetch failed:', e);
+            }
+        }
+
+        async function setOsOverride(mode) {
+            try {
+                const res = await fetch(`${API}/api/rag/os-override?mode=${encodeURIComponent(mode)}`, { method: 'POST' });
+                await readApiResponse(res);
+                loadSystemInfo(); // refresh display
+            } catch (e) {
+                console.warn('OS override failed:', e);
+            }
+        }
+
+        // ── Pipeline Status Polling (every 2s when active) ────────────
+        let _pollTimer = null;
+        let _pollActive = false;
+
+        function pollPipelineStatus() {
+            fetchPipelineStatus();
+        }
+
+        async function fetchPipelineStatus() {
+            try {
+                const res = await fetch(`${API}/api/rag/pipeline-status`);
+                if (!res.ok) return;
+                const d = await res.json();
+
+                // Run ID badge
+                const runEl = document.getElementById('run-id-badge');
+                const runId = d.runId || d.pipelineRunId;
+                if (runEl) runEl.textContent = runId && runId !== 'none' ? `Run: ${runId.substring(0, 20)}…` : '';
+
+                // Resource state badge
+                const rsBadge = document.getElementById('resource-state-badge');
+                if (rsBadge) {
+                    const state = d.resourceState || 'NORMAL';
+                    const stateMap = {
+                        NORMAL: { cls: 'tag-success', icon: '🟢' },
+                        WARNING: { cls: 'tag-warning', icon: '🟡' },
+                        CRITICAL: { cls: 'tag-failed', icon: '🔴' }
+                    };
+                    const s = stateMap[state] || stateMap.NORMAL;
+                    rsBadge.className = `tag-pill ${s.cls}`;
+                    rsBadge.textContent = `${s.icon} ${state}`;
+                }
+
+                // The backend reports stage snapshots, not per-document completion across all stages.
+                const running = (d.isRunning ?? d.running) === true;
+                const stage = d.currentStage || 'IDLE';
+                const stages = d.stageCounters || {};
+                setStage('parse', d.processedDocs ?? stages.completed ?? 0, stages.processing || 0);
+                setStage('chunk', d.totalChunks ?? stages.chunked ?? 0, stages.inChunking || 0);
+                setStage('embed', d.indexedVectors ?? stages.embedded ?? 0, stages.inEmbedding || 0);
+                setStage('store', d.indexedVectors ?? stages.stored ?? 0, 0);
+                if (running && ['PARSE', 'CHUNK', 'EMBED', 'STORE'].includes(stage)) {
+                    document.getElementById(`stage-${stage.toLowerCase()}-act`).textContent = 'Running…';
+                }
+
+                const total = d.discoveredDocs ?? d.totalDocuments ?? 0;
+                const done = d.processedDocs ?? d.completedDocuments ?? 0;
+                const failed = d.failedDocs ?? d.failedDocuments ?? 0;
+                const stageProgress = { IDLE: 0, PARSE: 0, CHUNK: 33, EMBED: 67, STORE: 67, COMPLETED: 100 };
+                const pct = d.currentStage ? (stageProgress[stage] ?? 0) : (total > 0 ? Math.round(done / total * 100) : 0);
+                const bar = document.getElementById('pipeline-progress-bar');
+                const label = document.getElementById('pipeline-progress-label');
+                const tput = document.getElementById('pipeline-throughput');
+                if (bar) bar.style.width = pct + '%';
+                if (label) {
+                    label.textContent = stage === 'IDLE' && !running && total === 0
+                        ? 'No active run'
+                        : `${stage === 'COMPLETED' ? 'Run finished' : stage} • ${done}/${total} docs parsed${failed > 0 ? ` • ${failed} failed` : ''}`;
+                }
+                if (tput) {
+                    tput.textContent = d.throughputPagesPerSec != null
+                        ? `${d.throughputPagesPerSec.toFixed(1)} pages/sec${d.estimatedEtaSec ? ` • ETA ~${d.estimatedEtaSec}s` : ''}`
+                        : (runId && runId !== 'none' ? `${d.totalPages || 0} pages • ${d.totalChunks || 0} chunks • ${d.indexedVectors || 0} vectors` : '');
+                }
+
+                // Failed docs
+                const failedDiv = document.getElementById('failed-docs-list');
+                if (failedDiv) {
+                    const failedDocs = d.failedDocumentNames || [];
+                    if (failedDocs.length > 0) {
+                        failedDiv.style.display = 'block';
+                        failedDiv.innerHTML = '<strong>🔴 Failed:</strong> ' + failedDocs.map(f => escapeHtml(f)).join(' • ');
+                    } else if (failed > 0) {
+                        failedDiv.style.display = 'block';
+                        failedDiv.textContent = `🔴 ${failed} document(s) failed. See Audit History for details.`;
+                    } else {
+                        failedDiv.style.display = 'none';
+                    }
+                }
+
+                // Auto-restart poll if pipeline is running
+                if (running && !_pollActive) {
+                    _pollActive = true;
+                    _pollTimer = setInterval(fetchPipelineStatus, 2000);
+                } else if (!running && _pollActive) {
+                    _pollActive = false;
+                    clearInterval(_pollTimer);
+                    _pollTimer = null;
+                    fetchTelemetryOnce(); // final refresh
+                }
+            } catch (e) {
+                // Silently ignore — server may not be running yet
+            }
+        }
+
+        function setStage(name, ok, active) {
+            const okEl = document.getElementById(`stage-${name}-ok`);
+            const actEl = document.getElementById(`stage-${name}-act`);
+            if (okEl) okEl.textContent = ok > 0 ? `✅ ${ok}` : '–';
+            if (actEl) actEl.textContent = active > 0 ? `🔄 ${active}` : '';
+        }
+
+        async function resumePipeline() {
+            const statusEl = document.getElementById('pipeline-status-text');
+            if (statusEl) statusEl.innerHTML = '<span style="color:var(--secondary);">↺ Resuming last pipeline run...</span>';
+            try {
+                const res = await fetch(`${API}/api/rag/pipeline/resume`, { method: 'POST' });
+                const data = await readApiResponse(res);
+                if (statusEl) statusEl.innerHTML = `<span style="color:#0A7A66;">✔ Resume initiated: ${escapeHtml(data.message || JSON.stringify(data))}</span>`;
+                // Start polling immediately
+                if (!_pollActive) {
+                    _pollActive = true;
+                    _pollTimer = setInterval(fetchPipelineStatus, 2000);
+                }
+            } catch (e) {
+                if (statusEl) statusEl.innerHTML = `<span style="color:#CF222E;">Resume failed: ${escapeHtml(e.message)}</span>`;
+            }
+        }
+
+        // ── File Inspect (replaces deleted /api/rag/optimize-check) ──
+        async function runInspectFile() {
+            const input = document.getElementById('inspect-file-path');
+            const resultBox = document.getElementById('inspect-result-box');
+            const path = input ? input.value.trim() : '';
+
+            resultBox.style.display = 'block';
+            resultBox.innerHTML = '<span style="color:var(--secondary);">🔍 Inspecting file (read-only, no modifications)...</span>';
+
+            try {
+                const url = path
+                    ? `${API}/api/rag/inspect-file?filePath=${encodeURIComponent(path)}`
+                    : `${API}/api/rag/inspect-file`;
+                const res = await fetch(url, { method: 'POST' });
+                const data = await readApiResponse(res);
+
+                if (data.error) {
+                    resultBox.innerHTML = `<span style="color:#CF222E;">⚠️ ${escapeHtml(data.error)}</span>`;
+                    return;
+                }
+
+                resultBox.innerHTML = `
+                    <div style="font-weight:800; color:var(--primary); margin-bottom:6px;">📋 ${escapeHtml(data.filePath || data.fileName || path)}</div>
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:6px;">
+                        ${(data.sizeMb ?? data.fileSizeMb) != null ? `<div>📦 Size: <strong>${parseFloat(data.sizeMb ?? data.fileSizeMb).toFixed(2)} MB</strong></div>` : ''}
+                        ${data.recommendedPageBatchSize != null ? `<div>Page batch: <strong>${escapeHtml(data.recommendedPageBatchSize)}</strong></div>` : ''}
+                        ${data.strategy ? `<div>Strategy: <strong>${escapeHtml(data.strategy)}</strong></div>` : ''}
+                        ${data.pageCount != null ? `<div>📄 Pages: <strong>${data.pageCount}</strong></div>` : ''}
+                        ${data.encrypted != null ? `<div>🔒 Encrypted: <strong>${data.encrypted ? 'Yes' : 'No'}</strong></div>` : ''}
+                        ${data.sha256 ? `<div style="grid-column:1/-1;">🔑 SHA-256: <code style="font-size:0.75rem;">${escapeHtml(data.sha256.substring(0,32))}…</code></div>` : ''}
+                    </div>
+                `;
+            } catch (e) {
+                resultBox.innerHTML = `<span style="color:#CF222E;">Inspect failed: ${escapeHtml(e.message)}</span>`;
+            }
+        }
+
+        async function initHardwareTuning() {
+            try {
+                const res = await fetch(`${API}/api/rag/hardware-tuning`);
+                if (!res.ok) {
+                    fetchTelemetryOnce();
+                    return;
+                }
+                const profile = await res.json();
+                renderHardwareProfile(profile);
+            } catch (e) {
+                console.warn("Hardware tuning profile load fallback:", e);
+                fetchTelemetryOnce();
+            }
+        }
+
+        function renderHardwareProfile(profile) {
+            const ramSelect = document.getElementById('ram-capacity-select');
+            const cpuSelect = document.getElementById('cpu-cores-select');
+            const presetSelect = document.getElementById('hw-preset-select');
+            const badge = document.getElementById('telemetry-text');
+
+            if (ramSelect) ramSelect.value = profile.ramCapacityGb;
+            if (cpuSelect) cpuSelect.value = profile.allocatedCores;
+
+            // Match preset if exists
+            const presetKey = `${profile.ramCapacityGb}_${profile.allocatedCores}`;
+            if (presetSelect) {
+                let matched = false;
+                for (let opt of presetSelect.options) {
+                    if (opt.value === presetKey) {
+                        presetSelect.value = presetKey;
+                        matched = true;
+                        break;
+                    }
+                }
+                if (!matched) presetSelect.value = 'custom';
+            }
+
+            if (badge) {
+                badge.innerHTML = `<strong>${profile.allocatedCores} Cores</strong> | <strong>${profile.ramCapacityGb} GB RAM</strong> (Ceiling: ${profile.memorySafetyCeilingMb} MB) | Heap: ${profile.heapUsedMb} / ${profile.heapMaxMb} MB`;
+            }
+        }
+
+        function onPresetChange(val) {
+            if (val === 'custom') return;
+            const parts = val.split('_');
+            const ram = parseInt(parts[0], 10);
+            const cores = parseInt(parts[1], 10);
+
+            document.getElementById('ram-capacity-select').value = ram;
+            document.getElementById('cpu-cores-select').value = cores;
+            applyHardwareProfile();
+        }
+
+        function onManualHwChange() {
+            const presetSelect = document.getElementById('hw-preset-select');
+            if (presetSelect) presetSelect.value = 'custom';
+            applyHardwareProfile();
+        }
+
+        async function applyHardwareProfile() {
+            const ram = document.getElementById('ram-capacity-select').value;
+            const cores = document.getElementById('cpu-cores-select').value;
+            const badge = document.getElementById('telemetry-text');
+
+            badge.textContent = `Tuning to ${ram} GB RAM / ${cores} Cores...`;
+
+            try {
+                const res = await fetch(`${API}/api/rag/hardware-tuning?ramCapacityGb=${ram}&allocatedCores=${cores}`, {
+                    method: 'POST'
+                });
+                if (!res.ok) throw new Error('Failed to update tuning profile');
+                const profile = await res.json();
+                renderHardwareProfile(profile);
+            } catch (e) {
+                badge.textContent = `Error tuning profile: ${e.message}`;
+            }
+        }
+
+        // ── Navigation Tab Switching ─────────────────────────────────
+        function activateTab(tabId) {
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                const isTarget = btn.getAttribute('onclick') && btn.getAttribute('onclick').includes(tabId);
+                btn.classList.toggle('active', isTarget);
+            });
+            document.querySelectorAll('.tab-panel').forEach(panel => {
+                panel.classList.toggle('active', panel.id === tabId);
+            });
+            if (tabId === 'tab-jobs') {
+                loadAuditJobs();
+            } else if (tabId === 'tab-vectordb') {
+                loadVectorHub();
+            }
+        }
+
+        // Live Telemetry Polling (every 3 seconds)
+        let _telemetryInterval = null;
+        function startTelemetryLoop() {
+            if (_telemetryInterval) clearInterval(_telemetryInterval);
+            fetchTelemetryOnce();
+            _telemetryInterval = setInterval(fetchTelemetryOnce, 3000);
+        }
+
+        async function fetchTelemetryOnce() {
+            try {
+                const res = await fetch(`${API}/api/rag/system-metrics`);
+                if (!res.ok) return;
+                const data = await readApiResponse(res);
+                const cpu = data.cpuLoadPercent != null ? data.cpuLoadPercent : 0;
+                const cpuHtml = `<span class="cpu-load-chip">⚡ CPU: ${cpu.toFixed(1)}%</span>`;
+                const memText = `<strong>${data.availableProcessors} Cores</strong> | Heap: ${data.usedMemoryMb} / ${data.maxMemoryMb} MB`;
+                document.getElementById('telemetry-text').innerHTML = `${cpuHtml} ${memText}`;
+            } catch (e) {
+                console.warn('Telemetry poll error:', e);
+            }
+        }
+
+        async function runGcSweep() {
+            const badge = document.getElementById('telemetry-text');
+            badge.textContent = 'Sweeping partition heap...';
+            try {
+                await fetch(`${API}/api/rag/gc`, { method: 'POST' });
+                initHardwareTuning();
+                fetchTelemetryOnce();
+            } catch (e) {
+                badge.textContent = 'GC trigger completed';
+            }
+        }
+
+        function fillQuery(text) {
+            document.getElementById('qa-query-input').value = text;
+            sendQuestion();
+        }
+
+        async function sendQuestion() {
+            const input = document.getElementById('qa-query-input');
+            const query = input.value.trim();
+            if (!query) return;
+
+            const topK = document.getElementById('qa-topk-select').value;
+            const stream = document.getElementById('chat-stream');
+            const submitBtn = document.getElementById('btn-submit-qa');
+
+            const userBubble = document.createElement('div');
+            userBubble.className = 'chat-bubble user';
+            userBubble.innerHTML = `<div>${escapeHtml(query)}</div>`;
+            stream.appendChild(userBubble);
+            input.value = '';
+
+            const botBubble = document.createElement('div');
+            botBubble.className = 'chat-bubble bot';
+            botBubble.innerHTML = `<div style="font-weight:800; color:var(--primary); margin-bottom:6px;">RAG Assistant</div><div>Searching vector chunks & synthesizing verified response...</div>`;
+            stream.appendChild(botBubble);
+            stream.scrollTop = stream.scrollHeight;
+
+            submitBtn.disabled = true;
+
+            try {
+                const res = await fetch(`${API}/api/rag/ask?query=${encodeURIComponent(query)}&topK=${topK}`, { method: 'POST' });
+                const data = await readApiResponse(res);
+
+                let citationsHtml = '';
+                if (data.citations && data.citations.length > 0) {
+                    citationsHtml = '<div class="citation-tray">' + data.citations.map(c => `
+                        <span class="citation-chip" title="${escapeHtml(c.preview)}">
+                            📄 ${escapeHtml(c.document)} (p.${c.page}) &bull; [${escapeHtml(c.heading)}] &bull; ${Math.round(c.similarityScore * 100)}% Match
+                        </span>
+                    `).join('') + '</div>';
+                }
+
+                botBubble.innerHTML = `
+                    <div style="font-weight:800; color:var(--primary); margin-bottom:6px;">RAG Assistant</div>
+                    <div style="white-space: pre-wrap;">${escapeHtml(data.answer)}</div>
+                    ${citationsHtml}
+                `;
+            } catch (e) {
+                botBubble.innerHTML = `<span style="color:#CF222E; font-weight:700;">Error: ${escapeHtml(e.message)}</span>`;
+            } finally {
+                submitBtn.disabled = false;
+                stream.scrollTop = stream.scrollHeight;
+                fetchTelemetryOnce();
+            }
+        }
+
+        async function triggerPipeline(endpoint) {
+            const folderPath = document.getElementById('pipeline-folder-path').value.trim();
+            const statusEl = document.getElementById('pipeline-status-text');
+            const preEl = document.getElementById('pipeline-output-json');
+
+            statusEl.innerHTML = '<span style="color:var(--secondary);">⚡ Running streaming pipeline on disk...</span>';
+            preEl.textContent = '// Running...';
+
+            const url = folderPath ? `${API}${endpoint}?folderPath=${encodeURIComponent(folderPath)}` : `${API}${endpoint}`;
+
+            // Start polling immediately
+            if (!_pollActive) {
+                _pollActive = true;
+                _pollTimer = setInterval(fetchPipelineStatus, 2000);
+            }
+
+            try {
+                const res = await fetch(url, { method: 'POST' });
+                const data = await readApiResponse(res);
+
+                statusEl.innerHTML = `<span style="color:#0A7A66;">✔ Completed in ${data.totalExecutionTimeMs || data.executionTimeMs || 0} ms</span>`;
+                preEl.textContent = JSON.stringify(data, null, 2);
+
+                if (data.parsing) {
+                    document.getElementById('kpi-files').textContent = data.parsing.processed;
+                    document.getElementById('kpi-pages').textContent = data.parsing.totalPages;
+                    document.getElementById('kpi-speed').textContent = Math.round(data.parsing.pagesPerSecond);
+                }
+                if (data.chunking) {
+                    document.getElementById('kpi-chunks').textContent = data.chunking.totalChunks;
+                }
+            } catch (e) {
+                statusEl.innerHTML = `<span style="color:#CF222E;">❌ Pipeline execution failed: ${escapeHtml(e.message)}</span>`;
+            } finally {
+                // Stop polling after completion
+                if (_pollActive) {
+                    _pollActive = false;
+                    clearInterval(_pollTimer);
+                    _pollTimer = null;
+                }
+                fetchTelemetryOnce();
+                fetchPipelineStatus(); // final status snapshot
+            }
+        }
+
+        let selectedFilesToUpload = [];
+
+        function handleFilesSelected(files) {
+            if (!files || files.length === 0) return;
+            selectedFilesToUpload = Array.from(files).filter(f => f.name.toLowerCase().endsWith('.pdf'));
+            
+            const listDiv = document.getElementById('selected-files-list');
+            const countSpan = document.getElementById('selected-files-count');
+            const uploadBtn = document.getElementById('btn-upload-ingest');
+
+            countSpan.textContent = selectedFilesToUpload.length;
+
+            if (selectedFilesToUpload.length > 0) {
+                uploadBtn.style.display = 'inline-flex';
+                listDiv.innerHTML = selectedFilesToUpload.map(f => `
+                    <span class="citation-chip" style="font-size:0.75rem;">
+                        📄 ${escapeHtml(f.name)} (${(f.size / (1024 * 1024)).toFixed(2)} MB)
+                    </span>
+                `).join('');
+            } else {
+                uploadBtn.style.display = 'none';
+                listDiv.innerHTML = '<span style="color:#CF222E; font-size:0.8rem;">No PDF files found in selection.</span>';
+            }
+        }
+
+        // Setup Drag & Drop on page load
+        setTimeout(() => {
+            const dropZone = document.getElementById('drop-zone');
+            if (dropZone) {
+                ['dragenter', 'dragover'].forEach(eventName => {
+                    dropZone.addEventListener(eventName, (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        dropZone.style.borderColor = 'var(--primary)';
+                        dropZone.style.background = '#E0FAF5';
+                    }, false);
+                });
+                ['dragleave', 'drop'].forEach(eventName => {
+                    dropZone.addEventListener(eventName, (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        dropZone.style.borderColor = 'var(--secondary)';
+                        dropZone.style.background = '#F4FAFF';
+                    }, false);
+                });
+                dropZone.addEventListener('drop', (e) => {
+                    const dt = e.dataTransfer;
+                    if (dt && dt.files && dt.files.length > 0) {
+                        handleFilesSelected(dt.files);
+                    }
+                }, false);
+            }
+        }, 300);
+
+        async function uploadAndRunPipeline() {
+            if (!selectedFilesToUpload || selectedFilesToUpload.length === 0) return;
+
+            const statusEl = document.getElementById('pipeline-status-text');
+            const preEl = document.getElementById('pipeline-output-json');
+            const uploadBtn = document.getElementById('btn-upload-ingest');
+
+            statusEl.innerHTML = `<span style="color:var(--secondary);">🚀 Uploading ${selectedFilesToUpload.length} PDF(s) and running pipeline...</span>`;
+            preEl.textContent = '// Uploading & processing...';
+            uploadBtn.disabled = true;
+            if (!_pollActive) {
+                _pollActive = true;
+                _pollTimer = setInterval(fetchPipelineStatus, 2000);
+            }
+
+            const formData = new FormData();
+            for (let file of selectedFilesToUpload) {
+                formData.append('files', file);
+            }
+
+            try {
+                const res = await fetch(`${API}/api/rag/upload-and-ingest`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await readApiResponse(res);
+
+                statusEl.innerHTML = `<span style="color:#0A7A66; font-weight:800;">✔ Upload & Ingestion complete in ${data.totalExecutionTimeMs || 0} ms</span>`;
+                preEl.textContent = JSON.stringify(data, null, 2);
+
+                if (data.parsing) {
+                    document.getElementById('kpi-files').textContent = data.parsing.processed;
+                    document.getElementById('kpi-pages').textContent = data.parsing.totalPages;
+                    document.getElementById('kpi-speed').textContent = Math.round(data.parsing.pagesPerSecond);
+                }
+                if (data.chunking) {
+                    document.getElementById('kpi-chunks').textContent = data.chunking.totalChunks;
+                }
+
+                // Reset selection
+                selectedFilesToUpload = [];
+                document.getElementById('selected-files-list').innerHTML = '';
+                document.getElementById('selected-files-count').textContent = '0';
+                uploadBtn.style.display = 'none';
+
+                fetchTelemetryOnce();
+            } catch (e) {
+                statusEl.innerHTML = `<span style="color:#CF222E; font-weight:800;">❌ Upload failed: ${escapeHtml(e.message)}</span>`;
+            } finally {
+                uploadBtn.disabled = false;
+                fetchPipelineStatus();
+            }
+        }
+
+        async function loadAuditJobs() {
+            const tbody = document.getElementById('audit-table-body');
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:18px;">Loading audit logs...</td></tr>';
+            try {
+                const res = await fetch(`${API}/api/rag/jobs`);
+                const jobs = await readApiResponse(res);
+                if (jobs.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:18px; color:var(--text-muted);">No documents processed yet. Drop PDFs into data/raw_pdfs and click Ingest.</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = jobs.map(j => `
+                    <tr>
+                        <td><strong>${escapeHtml(j.filename)}</strong></td>
+                        <td><span class="tag-pill ${j.status === 'SUCCESS' ? 'tag-success' : 'tag-failed'}">${escapeHtml(j.status)}</span></td>
+                        <td>${j.totalPages}</td>
+                        <td>${j.executionTimeMs} ms</td>
+                        <td><code style="font-size:0.75rem; color:var(--primary); font-weight:700;">${j.checksum ? j.checksum.substring(0, 16) + '...' : '-'}</code></td>
+                        <td>${j.processedAt ? j.processedAt.replace('T', ' ').substring(0, 19) : '-'}</td>
+                    </tr>
+                `).join('');
+            } catch (e) {
+                tbody.innerHTML = `<tr><td colspan="6" style="color:#CF222E; text-align:center;">Error loading audit logs: ${escapeHtml(e.message)}</td></tr>`;
+            }
+        }
+
+        async function loadVectorHub() {
+            const statusEl = document.getElementById('vdb-status-badge');
+            const collEl = document.getElementById('vdb-collection-name');
+            const countEl = document.getElementById('vdb-total-vectors');
+            const tbody = document.getElementById('vdb-table-body');
+
+            try {
+                const statusRes = await fetch(`${API}/api/rag/vector-db/status`);
+                if (statusRes.ok) {
+                    const status = await readApiResponse(statusRes);
+                    statusEl.innerHTML = status.chromaOnline 
+                        ? '<span style="color:#0A7A66; font-weight:800;">🟢 Online</span>'
+                        : '<span style="color:var(--secondary); font-weight:800;">🟡 Embedded Local</span>';
+                    collEl.textContent = status.collectionName || 'rag_documents';
+                    countEl.textContent = status.totalVectorsCount || 0;
+                }
+
+                if (!statusRes.ok) await readApiResponse(statusRes);
+                const docsRes = await fetch(`${API}/api/rag/vector-db/documents?limit=50`);
+                if (!docsRes.ok) await readApiResponse(docsRes);
+                if (docsRes.ok) {
+                    const docs = await docsRes.json();
+                    if (docs.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:18px; color:var(--text-muted);">No vectors indexed yet. Ingest documents to populate the vector store.</td></tr>';
+                        return;
+                    }
+                    tbody.innerHTML = docs.map(d => `
+                        <tr>
+                            <td><code style="font-size:0.75rem; color:var(--primary); font-weight:800;">${escapeHtml(d.id)}</code></td>
+                            <td><strong>${escapeHtml(d.documentName)}</strong></td>
+                            <td>${d.pageNumber}</td>
+                            <td><span style="font-size:0.8rem; color:var(--secondary); font-weight:700;">${escapeHtml(d.heading)}</span></td>
+                            <td><span class="tag-pill tag-success">${d.dimension}-dim</span></td>
+                            <td><div style="max-width:340px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:0.8rem; color:var(--text-muted);">${escapeHtml(d.textPreview)}</div></td>
+                        </tr>
+                    `).join('');
+                }
+            } catch (e) {
+                statusEl.textContent = 'Unavailable';
+                tbody.innerHTML = `<tr><td colspan="6" style="color:#CF222E; text-align:center;">Error loading vectors: ${escapeHtml(e.message)}</td></tr>`;
+            }
+        }
+
+        async function runSearch() {
+            const input = document.getElementById('vector-search-input');
+            const query = input.value.trim();
+            if (!query) return;
+
+            const topK = document.getElementById('vector-topk-select').value;
+            const container = document.getElementById('vector-search-results');
+            container.innerHTML = '<p style="color:var(--secondary); font-weight:700;">Searching vector database...</p>';
+
+            try {
+                const res = await fetch(`${API}/api/rag/search?query=${encodeURIComponent(query)}&topK=${topK}`);
+                const data = await readApiResponse(res);
+
+                if (data.length === 0) {
+                    container.innerHTML = '<p style="color:var(--text-muted);">No matching vector chunks found.</p>';
+                    return;
+                }
+
+                container.innerHTML = data.map((r, i) => `
+                    <div style="background:#F4FAFF; border:1.5px solid var(--border); border-radius:10px; padding:16px; margin-bottom:12px;">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+                            <strong style="color:var(--primary);">#${i + 1} &bull; ${escapeHtml(r.document)} (Page ${r.page})</strong>
+                            <span class="tag-pill tag-success">Score: ${Math.round(r.score * 100)}%</span>
+                        </div>
+                        <div style="font-size:0.82rem; color:var(--secondary); font-weight:800; margin-bottom:6px;">Section: ${escapeHtml(r.heading)}</div>
+                        <pre style="background:#FFFFFF; border:1.5px solid var(--border); padding:10px; border-radius:6px; font-size:0.84rem; white-space:pre-wrap; margin:0; color:var(--text-main);">${escapeHtml(r.text)}</pre>
+                    </div>
+                `).join('');
+            } catch (e) {
+                container.innerHTML = `<p style="color:#CF222E;">Search error: ${escapeHtml(e.message)}</p>`;
+            }
+        }
+
+        async function readApiResponse(response) {
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.message || data.error || `Request failed (${response.status})`);
+            }
+            return data;
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            return text.toString()
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,36 @@
+spring:
+  application:
+    name: smart-rag-platform-test
+  datasource:
+    url: jdbc:h2:mem:test_pipeline_db;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    database-platform: org.hibernate.dialect.H2Dialect
+
+rag:
+  pipeline:
+    base-dir: "target/test-data"
+    raw-pdf-dir: "target/test-data/raw_pdfs"
+    staging-md-dir: "target/test-data/staging_md"
+    chunked-jsonl-dir: "target/test-data/chunked_jsonl"
+    vector-storage-dir: "target/test-data/vector_storage"
+    max-concurrency: 4
+    memory-safety-threshold-mb: 2048
+    chunk-size: 1200
+    chunk-overlap: 150
+    chroma-url: "http://localhost:8005"
+    chroma-collection: "test_rag_documents"
+  llm:
+    endpoint: "http://localhost:11434/api/generate"
+    model: "llama3.2"
+    gemini-api-key: ""
+
+logging:
+  level:
+    root: INFO
+    com.nextgem.smartrag: DEBUG
+    org.apache.pdfbox: ERROR

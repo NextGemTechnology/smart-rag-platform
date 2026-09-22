@@ -1,0 +1,58 @@
+# ==============================================================================
+# Enterprise Smart RAG Platform - .gitignore
+# ==============================================================================
+
+# Build Output
+target/
+build/
+dist/
+!.mvn/wrapper/maven-wrapper.jar
+
+# Environment Variables & Secrets (CRITICAL: Never commit keys or secrets)
+.env
+.env.*
+!.env.example
+*.env
+*.key
+*.pem
+
+# IDE & Editor files
+.idea/
+*.iws
+*.iml
+*.ipr
+.vscode/
+.settings/
+.project
+.classpath
+.factorypath
+.springBeans
+.sts4-cache
+
+# OS Generated Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# RAG Pipeline Runtime Data & Storage (User PDFs and generated indexes)
+data/raw_pdfs/*
+!data/raw_pdfs/.gitkeep
+data/staging_md/*
+!data/staging_md/.gitkeep
+data/chunked_jsonl/*
+!data/chunked_jsonl/.gitkeep
+data/vector_storage/*
+!data/vector_storage/.gitkeep
+data/*.mv.db
+data/*.trace.db
+data/pipeline_db*
+
+# Application Logs & Crash dumps
+*.log
+logs/
+*.dump
+*.dumpstream

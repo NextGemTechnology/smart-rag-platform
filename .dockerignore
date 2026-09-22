@@ -1,0 +1,9 @@
+target/
+.git/
+.idea/
+.mvn/
+data/
+*.log
+*.mv.db
+*.trace.db
+.DS_Store

@@ -1,0 +1,42 @@
+services:
+  # ----------------------------------------------------------------------------
+  # ChromaDB Vector Database
+  # ----------------------------------------------------------------------------
+  chromadb:
+    image: chromadb/chroma:0.5.5
+    container_name: rag_chroma_db
+    ports:
+      - "8005:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+      - ANONYMIZED_TELEMETRY=FALSE
+    restart: unless-stopped
+
+  # ----------------------------------------------------------------------------
+  # Enterprise Spring Boot RAG Ingestion Pipeline Application
+  # ----------------------------------------------------------------------------
+  rag-pipeline:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: nextgem/smart-rag-platform:1.0.0
+    container_name: smart_rag_platform_app
+    ports:
+      - "${RAG_PORT:-8082}:8080"
+    volumes:
+      # Mount host data folder to persist PDFs, H2 DB, staging, and vectors
+      - ./data:/app/data
+    environment:
+      - PORT=8080
+      - CHROMA_URL=http://chromadb:8000
+      - RAG_LLM_GEMINI_API_KEY=${RAG_LLM_GEMINI_API_KEY:-}
+      - JAVA_OPTS=-server -Xms512m -Xmx2048m -XX:MaxDirectMemorySize=1024m -XX:+UseG1GC -XX:MaxGCPauseMillis=50 -XX:G1ReservePercent=15 -XX:InitiatingHeapOccupancyPercent=45 -Dorg.apache.pdfbox.rendering.UsePureJava=true -Dfile.encoding=UTF-8
+    depends_on:
+      - chromadb
+    restart: unless-stopped
+
+volumes:
+  chroma_data:
+    driver: local

@@ -1,0 +1,73 @@
+server:
+  port: ${PORT:8080}
+
+spring:
+  application:
+    name: smart-rag-platform
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 500MB
+      max-request-size: 2GB
+  datasource:
+    url: jdbc:h2:file:./data/pipeline_db;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    open-in-view: false
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: update
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+      settings:
+        web-allow-others: true
+
+# ==============================================================================
+# Enterprise High-Throughput RAG Pipeline Configuration
+# Optimized for Cross-Platform (Windows, macOS, Linux)
+# ==============================================================================
+rag:
+  pipeline:
+    # Separate dedicated process directories
+    base-dir: "data"
+    raw-pdf-dir: "data/raw_pdfs"
+    staging-md-dir: "data/staging_md"
+    chunked-jsonl-dir: "data/chunked_jsonl"
+    vector-storage-dir: "data/vector_storage"
+
+    # Parallelism & Concurrency (mapped to system hardware)
+    max-concurrency: 8
+
+    # Memory Safety Guardrail (MB)
+    # If heap exceeds this threshold, workers throttle to avoid OOM
+    memory-safety-threshold-mb: 6144
+
+    # RAG Chunking Parameters
+    chunk-size: 1200
+    chunk-overlap: 150
+
+    # Chroma Vector Database Settings
+    chroma-url: "${CHROMA_URL:http://localhost:8005}"
+    chroma-collection: "rag_documents"
+
+# ==============================================================================
+# LLM Configuration for RAG Answer Generation
+# Supports: Google Gemini API, Local Ollama, or Extractive Fallback
+# ==============================================================================
+  llm:
+    # Ollama local inference endpoint (used when gemini-api-key is empty)
+    endpoint: "http://localhost:11434/api/generate"
+    model: "llama3.2"
+    # Google Gemini API key (set via env: RAG_LLM_GEMINI_API_KEY)
+    # If set, Gemini is used as primary; if blank, Ollama is tried then extractive fallback
+    gemini-api-key: "${RAG_LLM_GEMINI_API_KEY:}"
+
+logging:
+  level:
+    root: INFO
+    com.nextgem.smartrag: DEBUG
+    org.apache.pdfbox: WARN

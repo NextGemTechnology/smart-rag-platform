@@ -22,6 +22,10 @@ A production-grade, memory-bounded, cross-platform Spring Boot RAG (Retrieval-Au
 
 ## 🏗️ Architecture & How It Works
 
+<p align="center">
+  <img src="docs/assets/architecture-diagram.png" alt="Architecture Diagram" width="850"/>
+</p>
+
 ```
                      data/raw_pdfs/*.pdf (Original files untouched)
                                     │
@@ -102,13 +106,18 @@ A production-grade, memory-bounded, cross-platform Spring Boot RAG (Retrieval-Au
   - **RAM Ceilings**: Configure memory capacity (8 GB, 16 GB, 32 GB), dynamically recalculating the safety ceiling (`maxHeap * 0.85`).
 - **Resource Manager**: Actively checks memory pressure (`NORMAL`, `WARNING`, `CRITICAL`). If heap usage exceeds the safety ceiling, workers throttle and yield until memory stabilizes.
 
-### 5. Ocean Breeze Neomorphic Web Studio
+### 5. Ocean Breeze Neomorphic Web Studio & Responsive Navigation Panel
 - **Palette**: Figma-accurate Ocean Breeze theme:
   - Deep Navy Primary: `#0B3D91`
   - Sky Blue Secondary: `#3BA7F2`
   - Mint / Aqua Tertiary: `#7FE7D6`
   - Soft Canvas Background: `#E8F6FF`
 - **Neomorphic Surfaces**: Soft dual-light shadows (`--neo-raised`, `--neo-sunken`, `--neo-raised-pill`) giving tactile physical elevation to panels, buttons, and recessed wells.
+- **Responsive Navigation Sidebar Panel**:
+  - **Desktop**: Clean left navigation sidebar (`270px`) organizing workspaces (*RAG Assistant*, *Ingestion Pipeline*, *Vector DB*, *Direct Similarity*, *Audit History*, and *Settings*) and database tools (*H2 Database Console*, *DB Records & Jobs*, and *ChromaDB Docs*).
+  - **Mobile/Tablet**: Off-canvas slide-out drawer triggered by a neomorphic hamburger button (`☰`) with auto-dismissing blurred backdrop overlay.
+- **Settings & System Diagnostics**:
+  - Dedicated full-width view for real-time hardware tuning (CPU core and RAM allocation), OS execution mode override, JVM garbage collection sweep trigger, and live service endpoints (ChromaDB + Multi-tier LLMs).
 - **Real-Time Telemetry**: 3-second heartbeat polling displaying live **CPU load %** (via `com.sun.management.OperatingSystemMXBean`), active thread workers, and JVM heap status in the top bar.
 - **Unified Single-Page Architecture**: Single clean interface providing:
   - **Ask Question / Q&A Studio** with instant citations
@@ -116,6 +125,7 @@ A production-grade, memory-bounded, cross-platform Spring Boot RAG (Retrieval-Au
   - **Vector DB Management** with ChromaDB status, collection stats, and chunk deduplication metrics
   - **Semantic Vector Search** tester
   - **Audit Jobs & Resume Manager** for monitoring completed, failed, or resumable jobs
+  - **Settings & Diagnostics** for dynamic hardware and OS configuration
 
 ---
 

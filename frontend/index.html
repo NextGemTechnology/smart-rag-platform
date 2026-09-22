@@ -806,6 +806,100 @@
             color: var(--secondary-dark) !important;
             text-decoration: underline;
         }
+
+        /* ── Responsive Navigation Panel ─────────────────────────── */
+        .app-nav-panel {
+            background: var(--bg);
+            border: 1px solid rgba(255, 255, 255, 0.9);
+            border-radius: 24px;
+            padding: 22px 16px;
+            box-shadow: var(--neo-raised);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            position: sticky;
+            top: 20px;
+            max-height: calc(100vh - 40px);
+            overflow-y: auto;
+        }
+
+        .nav-panel-section {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .nav-section-label {
+            font-size: 0.7rem;
+            font-weight: 800;
+            color: var(--secondary-dark);
+            text-transform: uppercase;
+            letter-spacing: 0.75px;
+            padding: 0 12px;
+            margin-bottom: 2px;
+        }
+
+        .nav-items-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .nav-items-group .tab-button,
+        .nav-items-group .db-link-btn {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 11px 16px;
+            font-size: 0.86rem;
+            font-weight: 700;
+            text-decoration: none;
+            justify-content: flex-start;
+            text-align: left;
+            border-radius: 18px;
+            box-sizing: border-box;
+        }
+
+        .nav-items-group .tab-button.active {
+            color: var(--primary);
+            box-shadow: var(--neo-sunken);
+            border-color: rgba(59, 167, 242, 0.6);
+            font-weight: 800;
+        }
+
+        .nav-toggle-btn {
+            display: none;
+            background: var(--bg);
+            border: 1px solid rgba(203, 230, 248, 0.8);
+            border-radius: 14px;
+            color: var(--primary);
+            font-size: 1.25rem;
+            padding: 6px 14px;
+            cursor: pointer;
+            box-shadow: var(--neo-raised-sm);
+            transition: all 0.2s;
+        }
+
+        .nav-toggle-btn:hover {
+            box-shadow: var(--neo-sunken-sm);
+        }
+
+        .nav-panel-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(11, 29, 66, 0.35);
+            backdrop-filter: blur(4px);
+            z-index: 998;
+        }
+
+        .nav-panel-footer {
+            margin-top: auto;
+            padding-top: 12px;
+            border-top: 1px solid rgba(203, 230, 248, 0.6);
+        }
+
     </style>
     <link rel="stylesheet" href="css/layout.css">
 </head>
@@ -813,40 +907,92 @@
 
     <!-- LIGHT TOP HEADER -->
     <header>
-        <div class="header-brand">
-            <div class="brand-logo">⚡</div>
-            <div class="brand-info">
-                <h1>Enterprise RAG Pipeline Studio</h1>
-                <span>8-Core Zero-Copy Ingestion Engine &bull; Spring Boot 3.3</span>
+        <div style="display: flex; align-items: center; gap: 14px;">
+            <button class="nav-toggle-btn" id="nav-toggle-btn" onclick="toggleNavPanel()" aria-label="Toggle navigation menu">☰</button>
+            <div class="header-brand">
+                <div class="brand-logo">⚡</div>
+                <div class="brand-info">
+                    <h1>Enterprise RAG Pipeline Studio</h1>
+                    <span>8-Core Zero-Copy Ingestion Engine &bull; Spring Boot 3.3</span>
+                </div>
             </div>
         </div>
 
         <div class="header-controls">
-            <!-- Direct Database Links -->
-            <a href="http://localhost:8080/h2-console" target="_blank" class="db-link-btn" title="Open H2 Database Console">
-                🗄️ H2 Database
-            </a>
-            <a href="http://localhost:8080/api/rag/jobs" target="_blank" class="db-link-btn" title="View Document Jobs JSON">
-                📊 DB Records
-            </a>
-            <a href="http://localhost:8005/docs" target="_blank" class="db-link-btn" title="Open ChromaDB Swagger UI">
-                ⚡ ChromaDB (/docs)
-            </a>
+            <!-- Telemetry Badge + One-Click GC Sweep -->
+            <div class="telemetry-badge" id="telemetry-badge">
+                <span class="pulse-dot"></span>
+                <span id="telemetry-text">Loading hardware metrics...</span>
+                <button class="btn-gc" id="btn-gc" onclick="runGcSweep()" title="Trigger garbage collection to sweep memory immediately">🧹 Sweep</button>
+            </div>
         </div>
     </header>
 
-    <!-- NAVIGATION TABS -->
-    <nav class="app-tabs">
-        <button class="tab-button active" onclick="activateTab('tab-qa')">💬 RAG Assistant</button>
-        <button class="tab-button" onclick="activateTab('tab-pipeline')">🚀 Ingestion Pipeline</button>
-        <button class="tab-button" onclick="activateTab('tab-vectordb')">🗄️ Vector DB / Chroma</button>
-        <button class="tab-button" onclick="activateTab('tab-search')">🔍 Direct Similarity</button>
-        <button class="tab-button" onclick="activateTab('tab-jobs')">📋 Audit History</button>
-    </nav>
+    <!-- MOBILE OVERLAY BACKDROP -->
+    <div class="nav-panel-overlay" id="nav-panel-overlay" onclick="closeNavPanel()"></div>
 
-    <!-- MAIN WORKSPACE -->
+    <!-- MAIN WORKSPACE LAYOUT WITH SIDEBAR PANEL -->
     <div class="workspace-layout">
-    <main>
+
+        <!-- RESPONSIVE NAVIGATION & TOOLS PANEL -->
+        <aside class="app-nav-panel" id="app-nav-panel" aria-label="Navigation & Tools">
+            <div class="nav-panel-section">
+                <div class="nav-section-label">STUDIO WORKSPACES</div>
+                <div class="nav-items-group">
+                    <button class="tab-button active" onclick="activateTab('tab-qa')">
+                        <span>💬</span>
+                        <span>RAG Assistant</span>
+                    </button>
+                    <button class="tab-button" onclick="activateTab('tab-pipeline')">
+                        <span>🚀</span>
+                        <span>Ingestion Pipeline</span>
+                    </button>
+                    <button class="tab-button" onclick="activateTab('tab-vectordb')">
+                        <span>🗄️</span>
+                        <span>Vector DB / Chroma</span>
+                    </button>
+                    <button class="tab-button" onclick="activateTab('tab-search')">
+                        <span>🔍</span>
+                        <span>Direct Similarity</span>
+                    </button>
+                    <button class="tab-button" onclick="activateTab('tab-jobs')">
+                        <span>📋</span>
+                        <span>Audit History</span>
+                    </button>
+                    <button class="tab-button" onclick="activateTab('tab-settings')">
+                        <span>⚙️</span>
+                        <span>Settings</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="nav-panel-section">
+                <div class="nav-section-label">DATABASE & TOOLS</div>
+                <div class="nav-items-group">
+                    <a href="http://localhost:8080/h2-console" target="_blank" class="db-link-btn" title="Open H2 Database Console">
+                        <span>🗄️</span>
+                        <span>H2 Database</span>
+                    </a>
+                    <a href="http://localhost:8080/api/rag/jobs" target="_blank" class="db-link-btn" title="View Document Jobs JSON">
+                        <span>📊</span>
+                        <span>DB Records</span>
+                    </a>
+                    <a href="http://localhost:8005/docs" target="_blank" class="db-link-btn" title="Open ChromaDB Swagger UI">
+                        <span>⚡</span>
+                        <span>ChromaDB (/docs)</span>
+                    </a>
+                </div>
+            </div>
+
+            <div class="nav-panel-footer">
+                <div class="sys-info-chip" style="font-size:0.75rem; border-radius:14px; padding:8px 12px; justify-content:center;">
+                    <span class="pulse-dot"></span>
+                    <strong style="color:var(--primary);">Engine Active</strong>
+                </div>
+            </div>
+        </aside>
+
+        <main>
 
         <!-- TAB 1: RAG DOCUMENT QA -->
         <section id="tab-qa" class="tab-panel active">
@@ -1179,78 +1325,100 @@
             </div>
         </section>
 
+        <!-- TAB 6: SYSTEM & HARDWARE SETTINGS -->
+        <section id="tab-settings" class="tab-panel">
+            <div class="studio-card">
+                <div class="card-header-bar">
+                    <div class="header-title-block">
+                        <h2>System & Hardware Settings</h2>
+                        <p>Configure dynamic worker threads, memory safety ceilings, OS execution modes, and database connections</p>
+                    </div>
+                    <div class="card-header-actions">
+                        <button class="btn-tune" onclick="applyHardwareProfile()" title="Dynamically reconfigure backend thread pool, semaphore permits, and memory ceiling">⚡ Apply Tuning</button>
+                    </div>
+                </div>
+
+                <!-- SYSTEM HARDWARE & DYNAMIC TUNING BAR -->
+                <div class="system-hardware-bar" style="margin-bottom: 24px;">
+                    <h2 class="sidebar-heading">Hardware tuning</h2>
+                    <div class="hw-controls-group">
+                        <div class="hw-item">
+                            <label for="hw-preset-select">⚙️ Hardware Preset:</label>
+                            <select id="hw-preset-select" class="hw-select" onchange="onPresetChange(this.value)">
+                                <option value="8_4">8 GB RAM / 4 Cores</option>
+                                <option value="8_8" selected>8 GB RAM / 8 Cores (Default)</option>
+                                <option value="16_8">16 GB RAM / 8 Cores</option>
+                                <option value="16_16">16 GB RAM / 16 Cores (High Concurrency)</option>
+                                <option value="32_16">32 GB RAM / 16 Cores (Enterprise Scale)</option>
+                                <option value="custom">Custom Configuration</option>
+                            </select>
+                        </div>
+                        <div class="hw-item">
+                            <label for="ram-capacity-select">💾 RAM Capacity:</label>
+                            <select id="ram-capacity-select" class="hw-select" onchange="onManualHwChange()">
+                                <option value="4">4 GB RAM</option>
+                                <option value="8" selected>8 GB RAM</option>
+                                <option value="16">16 GB RAM</option>
+                                <option value="32">32 GB RAM</option>
+                                <option value="64">64 GB RAM</option>
+                            </select>
+                        </div>
+                        <div class="hw-item">
+                            <label for="cpu-cores-select">🧠 CPU Cores Allocation:</label>
+                            <select id="cpu-cores-select" class="hw-select" onchange="onManualHwChange()">
+                                <option value="2">2 Cores</option>
+                                <option value="4">4 Cores</option>
+                                <option value="8" selected>8 Cores</option>
+                                <option value="12">12 Cores</option>
+                                <option value="16">16 Cores</option>
+                                <option value="24">24 Cores</option>
+                                <option value="32">32 Cores</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SYSTEM INFO BAR (populated from /api/rag/system-info) -->
+                <div class="sys-info-bar" id="sys-info-bar" style="margin-bottom: 24px;">
+                    <h2 class="sidebar-heading">System overview</h2>
+                    <div class="sys-info-chip">🖥️ <span id="sys-os">Detecting OS...</span></div>
+                    <div class="sys-info-chip">🏗️ Arch: <strong id="sys-arch">–</strong></div>
+                    <div class="sys-info-chip">🧠 CPU: <strong id="sys-cpu">–</strong> cores</div>
+                    <div class="sys-info-chip">💾 RAM: <strong id="sys-ram">–</strong> GB</div>
+                    <div class="sys-info-chip">🎮 GPU: <strong id="sys-gpu">–</strong></div>
+                    <div class="sys-info-chip">☕ Java: <strong id="sys-java">–</strong></div>
+                    <div class="sys-info-chip">
+                        🌐 OS Mode:
+                        <select class="os-mode-select" id="os-mode-select" aria-label="OS Mode" onchange="setOsOverride(this.value)">
+                            <option value="AUTO">Auto Detect</option>
+                            <option value="WINDOWS">Windows</option>
+                            <option value="MACOS">macOS</option>
+                            <option value="LINUX">Linux</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- SERVICE INTEGRATIONS & DIAGNOSTICS -->
+                <div style="background: var(--bg); border: 1px solid rgba(255, 255, 255, 0.85); border-radius: 20px; padding: 22px; box-shadow: var(--neo-sunken);">
+                    <h3 class="sidebar-heading" style="margin-bottom: 14px;">Service Integrations & Diagnostics</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px;">
+                        <div style="padding: 16px; background: var(--bg); border-radius: 16px; box-shadow: var(--neo-raised-sm);">
+                            <div style="font-weight: 800; color: var(--primary); margin-bottom: 6px;">⚡ ChromaDB Vector Engine</div>
+                            <div style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 6px;">Internal: <code>http://chromadb:8000</code> &bull; Host: <code>http://localhost:8005</code></div>
+                            <div style="font-size: 0.82rem; color: var(--secondary-dark); font-weight: 700;">Active 384-dimensional cosine index</div>
+                        </div>
+                        <div style="padding: 16px; background: var(--bg); border-radius: 16px; box-shadow: var(--neo-raised-sm);">
+                            <div style="font-weight: 800; color: var(--primary); margin-bottom: 6px;">🤖 Multi-Tier LLM Routing</div>
+                            <div style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 4px;">1. Google Gemini (via <code>RAG_LLM_GEMINI_API_KEY</code>)</div>
+                            <div style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 4px;">2. Local Ollama (<code>http://localhost:11434</code> / <code>llama3.2</code>)</div>
+                            <div style="font-size: 0.82rem; color: var(--text-muted);">3. Structured Extractive Fallback (Deterministic)</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
     </main>
-
-    <aside class="system-sidebar" aria-label="System and hardware">
-    <!-- SYSTEM INFO BAR (populated from /api/rag/system-info) -->
-    <div class="sys-info-bar" id="sys-info-bar">
-        <h2 class="sidebar-heading">System overview</h2>
-        <div class="sys-info-chip">🖥️ <span id="sys-os">Detecting OS...</span></div>
-        <div class="sys-info-chip">🏗️ Arch: <strong id="sys-arch">–</strong></div>
-        <div class="sys-info-chip">🧠 CPU: <strong id="sys-cpu">–</strong> cores</div>
-        <div class="sys-info-chip">💾 RAM: <strong id="sys-ram">–</strong> GB</div>
-        <div class="sys-info-chip">🎮 GPU: <strong id="sys-gpu">–</strong></div>
-        <div class="sys-info-chip">☕ Java: <strong id="sys-java">–</strong></div>
-        <div class="sys-info-chip">
-            🌐 OS Mode:
-            <select class="os-mode-select" id="os-mode-select" aria-label="OS Mode" onchange="setOsOverride(this.value)">
-                <option value="AUTO">Auto Detect</option>
-                <option value="WINDOWS">Windows</option>
-                <option value="MACOS">macOS</option>
-                <option value="LINUX">Linux</option>
-            </select>
-        </div>
-    </div>
-
-    <!-- SYSTEM HARDWARE & DYNAMIC TUNING BAR -->
-    <div class="system-hardware-bar">
-        <h2 class="sidebar-heading">Hardware tuning</h2>
-        <div class="hw-controls-group">
-            <div class="hw-item">
-                <label for="hw-preset-select">⚙️ Hardware Preset:</label>
-                <select id="hw-preset-select" class="hw-select" onchange="onPresetChange(this.value)">
-                    <option value="8_4">8 GB RAM / 4 Cores</option>
-                    <option value="8_8" selected>8 GB RAM / 8 Cores (Default)</option>
-                    <option value="16_8">16 GB RAM / 8 Cores</option>
-                    <option value="16_16">16 GB RAM / 16 Cores (High Concurrency)</option>
-                    <option value="32_16">32 GB RAM / 16 Cores (Enterprise Scale)</option>
-                    <option value="custom">Custom Configuration</option>
-                </select>
-            </div>
-            <div class="hw-item">
-                <label for="ram-capacity-select">💾 RAM Capacity:</label>
-                <select id="ram-capacity-select" class="hw-select" onchange="onManualHwChange()">
-                    <option value="4">4 GB RAM</option>
-                    <option value="8" selected>8 GB RAM</option>
-                    <option value="16">16 GB RAM</option>
-                    <option value="32">32 GB RAM</option>
-                    <option value="64">64 GB RAM</option>
-                </select>
-            </div>
-            <div class="hw-item">
-                <label for="cpu-cores-select">🧠 CPU Cores Allocation:</label>
-                <select id="cpu-cores-select" class="hw-select" onchange="onManualHwChange()">
-                    <option value="2">2 Cores</option>
-                    <option value="4">4 Cores</option>
-                    <option value="8" selected>8 Cores</option>
-                    <option value="12">12 Cores</option>
-                    <option value="16">16 Cores</option>
-                    <option value="24">24 Cores</option>
-                    <option value="32">32 Cores</option>
-                </select>
-            </div>
-            <button class="btn-tune" onclick="applyHardwareProfile()" title="Dynamically reconfigure backend thread pool, semaphore permits, and memory ceiling">⚡ Apply Tuning</button>
-        </div>
-
-        <!-- Telemetry Badge + One-Click GC Sweep -->
-        <div class="telemetry-badge" id="telemetry-badge">
-            <span class="pulse-dot"></span>
-            <span id="telemetry-text">Loading hardware metrics...</span>
-            <button class="btn-gc" onclick="runGcSweep()" title="Trigger garbage collection to sweep memory immediately">🧹 Sweep</button>
-        </div>
-    </div>
-
-    </aside>
     </div>
 
     <!-- 100% LIGHT FOOTER -->
@@ -1543,7 +1711,7 @@
             }
         }
 
-        // ── Navigation Tab Switching ─────────────────────────────────
+        // ── Navigation Tab Switching & Responsive Panel ──────────────
         function activateTab(tabId) {
             document.querySelectorAll('.tab-button').forEach(btn => {
                 const isTarget = btn.getAttribute('onclick') && btn.getAttribute('onclick').includes(tabId);
@@ -1556,6 +1724,31 @@
                 loadAuditJobs();
             } else if (tabId === 'tab-vectordb') {
                 loadVectorHub();
+            } else if (tabId === 'tab-settings') {
+                loadSystemInfo();
+                fetchTelemetryOnce();
+            }
+            closeNavPanel();
+        }
+
+        function toggleNavPanel() {
+            const panel = document.getElementById('app-nav-panel');
+            const overlay = document.getElementById('nav-panel-overlay');
+            if (!panel) return;
+            const isOpen = panel.classList.toggle('open');
+            if (overlay) overlay.classList.toggle('active', isOpen);
+        }
+
+        function closeNavPanel() {
+            const panel = document.getElementById('app-nav-panel');
+            const overlay = document.getElementById('nav-panel-overlay');
+            if (panel && panel.classList) {
+                if (typeof panel.classList.remove === 'function') panel.classList.remove('open');
+                else if (typeof panel.classList.toggle === 'function') panel.classList.toggle('open', false);
+            }
+            if (overlay && overlay.classList) {
+                if (typeof overlay.classList.remove === 'function') overlay.classList.remove('active');
+                else if (typeof overlay.classList.toggle === 'function') overlay.classList.toggle('active', false);
             }
         }
 

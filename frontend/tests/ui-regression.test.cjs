@@ -19,7 +19,19 @@ function setup(responder = () => ({})) {
             style: {}, children: [], options: [], listeners: {}, scrollHeight: 100,
             appendChild(child) { this.children.push(child); },
             addEventListener(name, fn) { this.listeners[name] = fn; },
-            classList: { toggle(name, on) { on ? classes.add(name) : classes.delete(name); }, contains(name) { return classes.has(name); } },
+            classList: {
+                toggle(name, on) {
+                    if (on === undefined) {
+                        if (classes.has(name)) classes.delete(name); else classes.add(name);
+                    } else {
+                        on ? classes.add(name) : classes.delete(name);
+                    }
+                    return classes.has(name);
+                },
+                contains(name) { return classes.has(name); },
+                add(name) { classes.add(name); },
+                remove(name) { classes.delete(name); }
+            },
         };
     };
     for (const [, id] of html.matchAll(/\bid="([^"]+)"/g)) elements.set(id, element(id));
@@ -57,7 +69,7 @@ test('both shipped frontends and layout styles stay identical', () => {
     assert.equal(readFileSync(path.join(__dirname, '../css/layout.css'), 'utf8'), readFileSync(path.join(__dirname, '../../src/main/resources/static/css/layout.css'), 'utf8'));
     const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map(m => m[1]);
     assert.equal(ids.length, new Set(ids).size);
-    assert.equal((html.match(/<button\b/g) || []).length, 25);
+    assert.equal((html.match(/<button\b/g) || []).length, 27);
     assert.equal((html.match(/<input\b/g) || []).length, 6);
     assert.equal((html.match(/<select\b/g) || []).length, 6);
 });
@@ -88,7 +100,7 @@ test('hardware presets, individual selectors, apply, and sweep keep their action
 
 test('all navigation tabs still select exactly one panel and load relevant data', async () => {
     const h = setup(({url}) => /documents|jobs/.test(url) ? [] : {chromaOnline:true});
-    for (const id of ['tab-qa','tab-pipeline','tab-vectordb','tab-search','tab-jobs']) {
+    for (const id of ['tab-qa','tab-pipeline','tab-vectordb','tab-search','tab-jobs','tab-settings']) {
         h.run(`activateTab('${id}')`); await flush();
         assert.deepEqual(h.panels.filter(p => p.classList.contains('active')).map(p => p.id), [id]);
         assert.equal(h.tabs.filter(t => t.classList.contains('active')).length, 1);

@@ -31,7 +31,7 @@ header {
 .tab-button { min-height: 44px; }
 .workspace-layout {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 296px;
+    grid-template-columns: 270px minmax(0, 1fr);
     align-items: start;
     gap: 28px;
     width: 100%;
@@ -56,7 +56,7 @@ input[type="text"], select { min-width: 0; }
 .input-bar select { flex: 0 0 156px; max-width: 156px !important; padding-inline: 12px; }
 .input-bar > .btn-action { flex-shrink: 0; }
 
-/* A quiet, consistently aligned side panel keeps all system controls available. */
+/* Clean, modern settings and hardware tuning styles */
 .system-sidebar { min-width: 0; display: grid; gap: 24px; }
 .sys-info-bar, .system-hardware-bar {
     padding: 22px;
@@ -65,21 +65,22 @@ input[type="text"], select { min-width: 0; }
     box-shadow: var(--neo-raised);
 }
 .sidebar-heading { width: 100%; margin-bottom: 6px; color: var(--primary); font-size: 0.94rem; letter-spacing: -0.15px; font-weight: 800; }
-.sys-info-bar { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; }
+.sys-info-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .sys-info-chip {
-    padding: 10px 0;
-    border-radius: 0;
-    box-shadow: none;
-    font-size: 0.78rem;
-    flex-wrap: wrap;
-    gap: 5px;
-    border-bottom: 1px solid rgba(203, 230, 248, 0.65);
+    padding: 8px 14px;
+    border-radius: 20px;
+    box-shadow: var(--neo-raised-pill);
+    font-size: 0.8rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.8);
     overflow-wrap: anywhere;
 }
-.sys-info-chip:last-child { border-bottom: 0; padding-bottom: 0; }
-.os-mode-select { flex: 1; min-height: 36px; margin-left: auto; }
+.sys-info-chip:last-child { border-bottom: 0; }
+.os-mode-select { flex: 0 1 auto; min-height: 36px; margin-left: auto; }
 .system-hardware-bar { display: flex; flex-direction: column; align-items: stretch; gap: 16px; }
-.hw-controls-group { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.hw-controls-group { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
 .hw-item { display: flex; flex-direction: column; align-items: stretch; gap: 7px; min-width: 0; }
 .hw-item label { font-size: 0.76rem; font-weight: 700; }
 .hw-select { width: 100%; min-height: 40px; }
@@ -147,8 +148,27 @@ footer { padding: 24px var(--page-gutter); flex-wrap: wrap; justify-content: cen
     header { flex-wrap: wrap; }
     .header-controls { justify-content: flex-start; }
     .workspace-layout { grid-template-columns: minmax(0, 1fr); }
-    .system-sidebar { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
     .header-title-block h2 { font-size: 1.5rem; }
+    .nav-toggle-btn { display: inline-flex; align-items: center; justify-content: center; }
+    .app-nav-panel {
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        width: 280px;
+        max-height: 100vh;
+        border-radius: 0 24px 24px 0;
+        z-index: 999;
+        transform: translateX(-105%);
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 10px 0 30px rgba(11, 29, 66, 0.25);
+    }
+    .app-nav-panel.open {
+        transform: translateX(0);
+    }
+    .nav-panel-overlay.active {
+        display: block;
+    }
 }
 
 @media (max-width: 700px) {

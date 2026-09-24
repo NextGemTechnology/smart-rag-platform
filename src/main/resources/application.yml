@@ -1,9 +1,27 @@
 server:
   port: ${PORT:8080}
+  tomcat:
+    threads:
+      max: ${TOMCAT_MAX_THREADS:250}
+      min-spare: 30
+    accept-count: ${TOMCAT_ACCEPT_COUNT:1000}
+    max-connections: ${TOMCAT_MAX_CONNECTIONS:8192}
+    connection-timeout: 20000ms
 
 spring:
   application:
     name: smart-rag-platform
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 64
+          max-idle: 32
+          min-idle: 8
+          max-wait: 2000ms
   servlet:
     multipart:
       enabled: true
@@ -28,9 +46,15 @@ spring:
 
 # ==============================================================================
 # Enterprise High-Throughput RAG Pipeline Configuration
-# Optimized for Cross-Platform (Windows, macOS, Linux)
+# Optimized for Cross-Platform (Windows, macOS, Linux) & 1,000 Concurrent Users
 # ==============================================================================
 rag:
+  # Query Engine Concurrency & Backpressure
+  query:
+    max-concurrency: ${RAG_QUERY_MAX_CONCURRENCY:128}
+    max-queue-depth: ${RAG_QUERY_MAX_QUEUE_DEPTH:500}
+    queue-timeout-ms: ${RAG_QUERY_QUEUE_TIMEOUT_MS:5000}
+
   pipeline:
     # Separate dedicated process directories
     base-dir: "data"

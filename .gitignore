@@ -50,6 +50,7 @@ data/vector_storage/*
 data/*.mv.db
 data/*.trace.db
 data/pipeline_db*
+data/backup/
 
 # Application Logs & Crash dumps
 *.log

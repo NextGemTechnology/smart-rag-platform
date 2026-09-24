@@ -7,11 +7,8 @@
 FROM maven:3.9-eclipse-temurin-17 AS builder
 WORKDIR /build
 
-# Cache maven dependencies
-COPY pom.xml .
-RUN mvn dependency:go-offline -B || true
-
 # Copy source code and package
+COPY pom.xml .
 COPY src ./src
 RUN mvn clean package -DskipTests
 

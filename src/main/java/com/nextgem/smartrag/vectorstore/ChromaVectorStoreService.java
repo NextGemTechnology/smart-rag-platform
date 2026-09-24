@@ -7,6 +7,7 @@ import com.nextgem.smartrag.service.DynamicHardwareTuningService;
 import com.nextgem.smartrag.service.ResourceManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
@@ -53,6 +54,12 @@ public class ChromaVectorStoreService {
     private final AtomicInteger totalVectorsIndexed = new AtomicInteger(0);
     private final AtomicInteger totalChunksDeduplicated = new AtomicInteger(0);
     private final ConcurrentHashMap<String, ChunkMetadataRef> chunkRegistry = new ConcurrentHashMap<>();
+
+    @Autowired(required = false)
+    private com.nextgem.smartrag.query.RagCacheService cacheService;
+
+    @Autowired(required = false)
+    private com.nextgem.smartrag.query.QueryCircuitBreaker circuitBreaker;
 
     /**
      * In-memory reference for deduplicated chunks tracking multi-source citations.
@@ -468,13 +475,31 @@ public class ChromaVectorStoreService {
      */
     public List<SearchResult> search(String queryText, int topK) {
         int safeK = Math.max(1, topK);
-        float[] queryEmbedding = computeLightweightEmbedding(queryText);
+        float[] queryEmbedding = null;
+        if (cacheService != null) {
+            queryEmbedding = cacheService.getEmbedding(queryText);
+        }
+        if (queryEmbedding == null) {
+            queryEmbedding = computeLightweightEmbedding(queryText);
+            if (cacheService != null) {
+                cacheService.putEmbedding(queryText, queryEmbedding);
+            }
+        }
 
-        // Try querying ChromaDB directly
-        if (chromaAvailable && chromaCollectionId != null) {
-            List<SearchResult> chromaResults = queryChromaDb(queryEmbedding, safeK);
-            if (!chromaResults.isEmpty()) {
-                return chromaResults;
+        // Try querying ChromaDB directly if circuit breaker allows
+        boolean allowChroma = chromaAvailable && chromaCollectionId != null
+                && (circuitBreaker == null || circuitBreaker.allowExecution());
+
+        if (allowChroma) {
+            try {
+                List<SearchResult> chromaResults = queryChromaDb(queryEmbedding, safeK);
+                if (circuitBreaker != null) circuitBreaker.recordSuccess();
+                if (!chromaResults.isEmpty()) {
+                    return chromaResults;
+                }
+            } catch (Exception e) {
+                if (circuitBreaker != null) circuitBreaker.recordFailure();
+                log.warn("[CHROMA] Query failed, falling back to disk: {}", e.getMessage());
             }
         }
 

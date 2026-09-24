@@ -1,5 +1,16 @@
 services:
   # ----------------------------------------------------------------------------
+  # Redis In-Memory Distributed Cache (Query & Embedding Caching)
+  # ----------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: rag_redis_cache
+    ports:
+      - "6379:6379"
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --save "" --appendonly no
+    restart: unless-stopped
+
+  # ----------------------------------------------------------------------------
   # ChromaDB Vector Database
   # ----------------------------------------------------------------------------
   chromadb:
@@ -30,11 +41,14 @@ services:
       - ./data:/app/data
     environment:
       - PORT=8080
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
       - CHROMA_URL=http://chromadb:8000
       - RAG_LLM_GEMINI_API_KEY=${RAG_LLM_GEMINI_API_KEY:-}
       - JAVA_OPTS=-server -Xms512m -Xmx2048m -XX:MaxDirectMemorySize=1024m -XX:+UseG1GC -XX:MaxGCPauseMillis=50 -XX:G1ReservePercent=15 -XX:InitiatingHeapOccupancyPercent=45 -Dorg.apache.pdfbox.rendering.UsePureJava=true -Dfile.encoding=UTF-8
     depends_on:
       - chromadb
+      - redis
     restart: unless-stopped
 
 volumes:

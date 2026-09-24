@@ -19,6 +19,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -38,6 +39,18 @@ public class RagIngestionController {
     private final PerformanceController performanceController;
     private final CheckpointService checkpointService;
     private final RagPipelineProperties properties;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.nextgem.smartrag.query.QueryConcurrencyGuard concurrencyGuard;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.nextgem.smartrag.query.QueryMetricsTracker metricsTracker;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.nextgem.smartrag.query.QueryCircuitBreaker circuitBreaker;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.nextgem.smartrag.query.RagCacheService cacheService;
 
     public RagIngestionController(
             RagPipelineOrchestrator orchestrator,
@@ -176,15 +189,78 @@ public class RagIngestionController {
     }
 
     /**
-     * Context-Grounded RAG QA Endpoint.
+     * Context-Grounded RAG QA Endpoint with Concurrency Guard, Rate Limiting & Backpressure.
      */
     @PostMapping("/ask")
-    public ResponseEntity<RagGenerationService.RagAnswer> askQuestion(
+    public ResponseEntity<?> askQuestion(
             @RequestParam String query,
-            @RequestParam(defaultValue = "5") int topK
+            @RequestParam(defaultValue = "5") int topK,
+            jakarta.servlet.http.HttpServletRequest request
     ) {
-        RagGenerationService.RagAnswer answer = generationService.ask(query, topK);
-        return ResponseEntity.ok(answer);
+        String clientIp = getClientIp(request);
+        if (concurrencyGuard != null && !concurrencyGuard.checkRateLimit(clientIp)) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .header("Retry-After", "1")
+                    .body(Map.of(
+                            "error", "Too Many Requests",
+                            "message", "Rate limit exceeded. Please wait a moment before sending more queries.",
+                            "status", 429
+                    ));
+        }
+
+        try {
+            RagGenerationService.RagAnswer answer = generationService.ask(query, topK);
+            return ResponseEntity.ok(answer);
+        } catch (com.nextgem.smartrag.query.QueryConcurrencyGuard.QueryBackpressureException e) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .header("Retry-After", "1")
+                    .body(Map.of(
+                            "error", "Service Overloaded",
+                            "message", e.getMessage(),
+                            "status", 503
+                    ));
+        }
+    }
+
+    /**
+     * Real-time Server-Sent Events (SSE) Streaming QA Endpoint.
+     */
+    @GetMapping(value = "/ask/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public org.springframework.web.servlet.mvc.method.annotation.SseEmitter askStream(
+            @RequestParam String query,
+            @RequestParam(defaultValue = "5") int topK,
+            jakarta.servlet.http.HttpServletRequest request
+    ) {
+        String clientIp = getClientIp(request);
+        org.springframework.web.servlet.mvc.method.annotation.SseEmitter emitter = new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(30_000L);
+
+        if (concurrencyGuard != null && !concurrencyGuard.checkRateLimit(clientIp)) {
+            try {
+                emitter.send(org.springframework.web.servlet.mvc.method.annotation.SseEmitter.event().name("error").data("Rate limit exceeded."));
+                emitter.complete();
+            } catch (IOException ignored) {}
+            return emitter;
+        }
+
+        generationService.askStream(query, topK, emitter);
+        return emitter;
+    }
+
+    /**
+     * Real-time Query System Concurrency & Cache Metrics.
+     */
+    @GetMapping("/query-metrics")
+    public ResponseEntity<?> getQueryMetrics() {
+        if (metricsTracker == null) {
+            return ResponseEntity.ok(Map.of("status", "Metrics tracker initializing"));
+        }
+        return ResponseEntity.ok(Map.of(
+                "metrics", metricsTracker.getSnapshot(),
+                "circuitBreakerState", circuitBreaker != null ? circuitBreaker.getState().name() : "CLOSED",
+                "redisOnline", cacheService != null && cacheService.isRedisOperational(),
+                "l1CacheSize", cacheService != null ? cacheService.getL1CacheSize() : 0,
+                "availablePermits", concurrencyGuard != null ? concurrencyGuard.getAvailablePermits() : 128
+        ));
     }
 
     /**
@@ -242,7 +318,7 @@ public class RagIngestionController {
         try {
             java.lang.management.OperatingSystemMXBean osBean = java.lang.management.ManagementFactory.getOperatingSystemMXBean();
             if (osBean instanceof com.sun.management.OperatingSystemMXBean sunBean) {
-                double load = sunBean.getCpuLoad(); // returns 0.0 to 1.0, or negative if not available yet
+                double load = sunBean.getCpuLoad();
                 if (load >= 0.0) {
                     cpuPercent = Math.round(load * 1000.0) / 10.0;
                 } else {
@@ -254,15 +330,41 @@ public class RagIngestionController {
             }
         } catch (Throwable ignored) {}
 
-        return ResponseEntity.ok(Map.of(
-                "availableProcessors", runtime.availableProcessors(),
-                "freeMemoryMb", runtime.freeMemory() / (1024 * 1024),
-                "totalMemoryMb", runtime.totalMemory() / (1024 * 1024),
-                "maxMemoryMb", runtime.maxMemory() / (1024 * 1024),
-                "usedMemoryMb", (runtime.totalMemory() - runtime.freeMemory()) / (1024 * 1024),
-                "cpuLoadPercent", cpuPercent,
-                "resourceState", resourceManager.getCurrentState().name()
-        ));
+        Map<String, Object> metrics = new HashMap<>();
+        metrics.put("availableProcessors", runtime.availableProcessors());
+        metrics.put("freeMemoryMb", runtime.freeMemory() / (1024 * 1024));
+        metrics.put("totalMemoryMb", runtime.totalMemory() / (1024 * 1024));
+        metrics.put("maxMemoryMb", runtime.maxMemory() / (1024 * 1024));
+        metrics.put("usedMemoryMb", (runtime.totalMemory() - runtime.freeMemory()) / (1024 * 1024));
+        metrics.put("cpuLoadPercent", cpuPercent);
+        metrics.put("resourceState", resourceManager.getCurrentState().name());
+
+        if (metricsTracker != null) {
+            metrics.put("queryMetrics", metricsTracker.getSnapshot());
+        }
+        if (circuitBreaker != null) {
+            metrics.put("circuitBreaker", circuitBreaker.getState().name());
+        }
+        if (cacheService != null) {
+            metrics.put("redisOnline", cacheService.isRedisOperational());
+            metrics.put("l1CacheEntries", cacheService.getL1CacheSize());
+        }
+        return ResponseEntity.ok(metrics);
+    }
+
+    private String getClientIp(jakarta.servlet.http.HttpServletRequest request) {
+        if (request == null) return "127.0.0.1";
+        String ip = request.getHeader("X-Forwarded-For");
+        if (ip == null || ip.isBlank() || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getHeader("X-Real-IP");
+        }
+        if (ip == null || ip.isBlank() || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getRemoteAddr();
+        }
+        if (ip != null && ip.contains(",")) {
+            ip = ip.split(",")[0].trim();
+        }
+        return ip != null ? ip : "127.0.0.1";
     }
 
     /**

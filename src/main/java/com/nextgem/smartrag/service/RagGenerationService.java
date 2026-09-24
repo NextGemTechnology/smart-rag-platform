@@ -2,24 +2,33 @@ package com.nextgem.smartrag.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.nextgem.smartrag.query.*;
 import com.nextgem.smartrag.vectorstore.ChromaVectorStoreService;
+import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.concurrent.*;
 
 /**
- * Enterprise RAG generation service that assembles retrieved context chunks
- * into citations and generates grounded answers via LLM or extractive synthesis.
+ * Enterprise Bounded RAG Generation & Synthesis Service.
+ * Engineered for ~1,000 Concurrent Users:
+ * - Multi-tier L1/L2 Redis caching
+ * - SingleFlight in-flight query deduplication
+ * - Fair FIFO Semaphore backpressure & queue timeout
+ * - Circuit breaker with graceful fast-fallback
+ * - Query relevance filtering (eliminates boilerplate preambles & code noise)
+ * - Server-Sent Events (SSE) token streaming to frontend
  */
 @Service
 public class RagGenerationService {
@@ -27,8 +36,14 @@ public class RagGenerationService {
     private static final Logger log = LoggerFactory.getLogger(RagGenerationService.class);
 
     private final ChromaVectorStoreService vectorStoreService;
+    private final RagCacheService cacheService;
+    private final QueryRelevanceFilter relevanceFilter;
+    private final QueryConcurrencyGuard concurrencyGuard;
+    private final QueryCircuitBreaker circuitBreaker;
+    private final QueryMetricsTracker metricsTracker;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
+    private final ExecutorService streamingExecutor;
 
     @Value("${rag.llm.endpoint:http://localhost:11434/api/generate}")
     private String llmEndpoint;
@@ -41,25 +56,120 @@ public class RagGenerationService {
 
     public RagGenerationService(
             ChromaVectorStoreService vectorStoreService,
+            RagCacheService cacheService,
+            QueryRelevanceFilter relevanceFilter,
+            QueryConcurrencyGuard concurrencyGuard,
+            QueryCircuitBreaker circuitBreaker,
+            QueryMetricsTracker metricsTracker,
             ObjectMapper objectMapper
     ) {
         this.vectorStoreService = vectorStoreService;
+        this.cacheService = cacheService;
+        this.relevanceFilter = relevanceFilter;
+        this.concurrencyGuard = concurrencyGuard;
+        this.circuitBreaker = circuitBreaker;
+        this.metricsTracker = metricsTracker;
         this.objectMapper = objectMapper;
+
+        this.streamingExecutor = Executors.newFixedThreadPool(64, r -> {
+            Thread t = new Thread(r, "rag-query-worker");
+            t.setDaemon(true);
+            return t;
+        });
+
         this.httpClient = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(5))
+                .version(HttpClient.Version.HTTP_2)
+                .connectTimeout(Duration.ofSeconds(4))
+                .executor(streamingExecutor)
                 .build();
     }
 
+    @PostConstruct
+    public void warmup() {
+        log.info("[RAG-QA] Pre-warming query pipeline, caches, and dependency connections...");
+        try {
+            String probe = "warmup probe";
+            cacheService.putEmbedding(probe, vectorStoreService.computeLightweightEmbedding(probe));
+            log.info("[RAG-QA] Warmup complete. Query pipeline ready for high-concurrency traffic.");
+        } catch (Exception e) {
+            log.warn("[RAG-QA] Warmup encountered non-critical notice: {}", e.getMessage());
+        }
+    }
+
     /**
-     * Answers a query using context retrieved from the vector store.
+     * Answers a query using context retrieved from the vector store with multi-tier caching,
+     * in-flight deduplication, bounded concurrency, and relevance filtering.
      */
     public RagAnswer ask(String query, int topK) {
-        List<ChromaVectorStoreService.SearchResult> searchResults = vectorStoreService.search(query, topK);
+        long startTime = System.currentTimeMillis();
+        String normQuery = (query != null) ? query.trim().replaceAll("\\s+", " ") : "";
+        int safeK = Math.max(1, Math.min(20, topK));
 
-        if (searchResults.isEmpty()) {
+        if (normQuery.isBlank()) {
+            return new RagAnswer(query, "Please enter a valid query.", List.of(), 0);
+        }
+
+        // Instant conversational response for greetings, pleasantries, and meta-questions
+        if (relevanceFilter.isConversationalQuery(normQuery)) {
+            String conversationalReply = relevanceFilter.getConversationalResponse(normQuery);
+            metricsTracker.recordSuccess(System.currentTimeMillis() - startTime);
+            return new RagAnswer(query, conversationalReply, List.of(), 0);
+        }
+
+        // 1. Check L1 / L2 Distributed Cache First
+        RagAnswer cached = cacheService.getAnswer(normQuery, safeK);
+        if (cached != null) {
+            metricsTracker.recordSuccess(System.currentTimeMillis() - startTime);
+            return cached;
+        }
+
+        // 2. SingleFlight Deduplication (Coalesces concurrent identical queries)
+        String dedupKey = normQuery.toLowerCase() + ":" + safeK;
+        try {
+            CompletableFuture<RagAnswer> future = concurrencyGuard.executeCoalesced(dedupKey, () -> {
+                // 3. Acquire Bounded Execution Permit with Backpressure Queue Protection
+                concurrencyGuard.acquirePermit();
+                try {
+                    return doAskInternal(normQuery, safeK);
+                } finally {
+                    concurrencyGuard.releasePermit();
+                }
+            });
+
+            RagAnswer answer = future.get(12, TimeUnit.SECONDS);
+            // Cache computed answer
+            cacheService.putAnswer(normQuery, safeK, answer);
+            metricsTracker.recordSuccess(System.currentTimeMillis() - startTime);
+            return answer;
+        } catch (QueryConcurrencyGuard.QueryBackpressureException e) {
+            metricsTracker.recordThrottled();
+            throw e;
+        } catch (Exception e) {
+            metricsTracker.recordFailure(System.currentTimeMillis() - startTime);
+            log.error("[RAG-QA] Query execution failed for '{}': {}", normQuery, e.getMessage());
+            return new RagAnswer(
+                    normQuery,
+                    "An error occurred while synthesizing your answer under heavy load: " + e.getMessage(),
+                    List.of(),
+                    0
+            );
+        }
+    }
+
+    private RagAnswer doAskInternal(String query, int topK) {
+        // Retrieve slightly larger candidate pool (topK * 2) so relevance filter can discard boilerplate
+        List<ChromaVectorStoreService.SearchResult> rawResults = vectorStoreService.search(query, topK * 2);
+
+        // Apply Relevance & Boilerplate Filtering
+        List<ChromaVectorStoreService.SearchResult> cleanResults = relevanceFilter.filterRelevantResults(rawResults, query, 0.25);
+        if (cleanResults.size() > topK) {
+            cleanResults = cleanResults.subList(0, topK);
+        }
+
+        if (cleanResults.isEmpty()) {
             return new RagAnswer(
                     query,
-                    "No relevant document context found in the vector index. Please ingest documents first.",
+                    "No relevant document context found in the vector index for your query. Please ingest documents first.",
                     List.of(),
                     0
             );
@@ -68,18 +178,23 @@ public class RagGenerationService {
         List<Citation> citations = new ArrayList<>();
         StringBuilder contextBuilder = new StringBuilder();
 
-        for (int i = 0; i < searchResults.size(); i++) {
-            ChromaVectorStoreService.SearchResult res = searchResults.get(i);
+        for (int i = 0; i < cleanResults.size(); i++) {
+            ChromaVectorStoreService.SearchResult res = cleanResults.get(i);
             String docLabel = (res.sources() != null && res.sources().size() > 1)
                     ? res.document() + " (also in: " + String.join(", ", res.sources()) + ")"
                     : res.document();
+
+            String previewText = res.text().replaceAll("\\s+", " ").trim();
+            if (previewText.length() > 250) {
+                previewText = previewText.substring(0, 250) + "...";
+            }
 
             citations.add(new Citation(
                     docLabel,
                     res.page(),
                     res.heading(),
                     res.score(),
-                    res.text().substring(0, Math.min(250, res.text().length())) + "..."
+                    previewText
             ));
 
             contextBuilder.append(String.format("[%d] Document: %s | Page: %d | Section: %s\n%s\n\n",
@@ -87,14 +202,57 @@ public class RagGenerationService {
         }
 
         String answer;
-        if (geminiApiKey != null && !geminiApiKey.isBlank()) {
+        if (geminiApiKey != null && !geminiApiKey.isBlank() && circuitBreaker.allowExecution()) {
             answer = callGeminiLlm(query, contextBuilder.toString());
+        } else if (circuitBreaker.allowExecution()) {
+            answer = callOllamaOrFallback(query, contextBuilder.toString(), cleanResults);
         } else {
-            // Attempt local Ollama endpoint, or fall back to context summary
-            answer = callOllamaOrFallback(query, contextBuilder.toString(), searchResults);
+            // Circuit Breaker OPEN -> Fast Extractive Fallback
+            answer = relevanceFilter.synthesizeExtractiveAnswer(query, cleanResults);
         }
 
-        return new RagAnswer(query, answer, citations, searchResults.size());
+        return new RagAnswer(query, answer, citations, cleanResults.size());
+    }
+
+    /**
+     * Server-Sent Events (SSE) Streaming query processing.
+     * Streams citations context and tokens in real-time to the frontend.
+     */
+    public void askStream(String query, int topK, SseEmitter emitter) {
+        long startTime = System.currentTimeMillis();
+        streamingExecutor.submit(() -> {
+            try {
+                RagAnswer answer = ask(query, topK);
+                metricsTracker.recordFirstTokenLatency(System.currentTimeMillis() - startTime);
+
+                // 1. Send context metadata event
+                emitter.send(SseEmitter.event().name("context").data(objectMapper.writeValueAsString(Map.of(
+                        "totalChunks", answer.totalContextChunks(),
+                        "citations", answer.citations()
+                ))));
+
+                // 2. Stream tokens in small chunks for responsive UI typing effect
+                String[] words = answer.answer().split(" ");
+                StringBuilder buffer = new StringBuilder();
+                for (int i = 0; i < words.length; i++) {
+                    buffer.append(words[i]).append(" ");
+                    if (i % 3 == 0 || i == words.length - 1) {
+                        emitter.send(SseEmitter.event().name("token").data(buffer.toString()));
+                        buffer.setLength(0);
+                        Thread.sleep(15);
+                    }
+                }
+
+                // 3. Send done event
+                emitter.send(SseEmitter.event().name("done").data(objectMapper.writeValueAsString(answer)));
+                emitter.complete();
+            } catch (Exception e) {
+                try {
+                    emitter.send(SseEmitter.event().name("error").data(e.getMessage()));
+                } catch (IOException ignored) {}
+                emitter.completeWithError(e);
+            }
+        });
     }
 
     private String callGeminiLlm(String query, String context) {
@@ -110,15 +268,20 @@ public class RagGenerationService {
                     .uri(URI.create(url))
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(body)))
-                    .timeout(Duration.ofSeconds(30))
+                    .timeout(Duration.ofSeconds(10))
                     .build();
 
             HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
             if (resp.statusCode() == 200) {
+                circuitBreaker.recordSuccess();
                 JsonNode root = objectMapper.readTree(resp.body());
                 return root.path("candidates").path(0).path("content").path("parts").path(0).path("text").asText();
+            } else {
+                circuitBreaker.recordFailure();
+                log.warn("Gemini API call returned status: {}", resp.statusCode());
             }
         } catch (Exception e) {
+            circuitBreaker.recordFailure();
             log.warn("Gemini API call failed: {}", e.getMessage());
         }
         return "Grounded Answer based on retrieved records:\n\n" + context;
@@ -137,32 +300,27 @@ public class RagGenerationService {
                     .uri(URI.create(llmEndpoint))
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(body)))
-                    .timeout(Duration.ofSeconds(5))
+                    .timeout(Duration.ofSeconds(3))
                     .build();
 
             HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
             if (resp.statusCode() == 200) {
+                circuitBreaker.recordSuccess();
                 JsonNode root = objectMapper.readTree(resp.body());
                 return root.path("response").asText();
+            } else {
+                circuitBreaker.recordFailure();
             }
         } catch (Exception ignored) {
-            // Ollama offline, use extractive synthesis
+            circuitBreaker.recordFailure();
         }
 
-        // Extractive fallback
-        StringBuilder sb = new StringBuilder();
-        sb.append("### Extractive Retrieval Summary\n");
-        sb.append("Based on the query: *\"").append(query).append("\"*\n\n");
-        for (ChromaVectorStoreService.SearchResult r : results) {
-            sb.append(String.format("- **%s** (Page %d, *%s*):\n  > %s\n\n",
-                    r.document(), r.page(), r.heading(),
-                    r.text().replaceAll("\\n", " ").trim()));
-        }
-        return sb.toString();
+        // Use intelligent extractive synthesis
+        return relevanceFilter.synthesizeExtractiveAnswer(query, results);
     }
 
     private String buildSystemPrompt(String query, String context) {
-        return "You are a specialized enterprise legal and document QA assistant.\n" +
+        return "You are a specialized enterprise document QA assistant.\n" +
                 "Answer the following question STRICTLY and ONLY using the provided document context.\n" +
                 "Always cite the source document name, page number, and section heading.\n" +
                 "Do not make up facts or extrapolate beyond the provided text.\n\n" +

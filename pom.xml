@@ -58,11 +58,16 @@
       <scope>runtime</scope>
     </dependency>
 
-    <!-- Lombok (Optional, for reducing boilerplate code) -->
+    <!-- Redis Starter for Distributed Query & Embedding Caching -->
     <dependency>
-      <groupId>org.projectlombok</groupId>
-      <artifactId>lombok</artifactId>
-      <optional>true</optional>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-redis</artifactId>
+    </dependency>
+
+    <!-- Commons Pool2 for Lettuce Redis Connection Pooling -->
+    <dependency>
+      <groupId>org.apache.commons</groupId>
+      <artifactId>commons-pool2</artifactId>
     </dependency>
 
 

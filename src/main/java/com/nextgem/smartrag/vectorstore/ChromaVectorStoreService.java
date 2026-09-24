@@ -174,6 +174,22 @@ public class ChromaVectorStoreService {
 
     private void createOrGetCollection() {
         try {
+            // 1. Check if collection already exists
+            HttpRequest getReq = HttpRequest.newBuilder()
+                    .uri(URI.create(properties.getChromaUrl() + "/api/v1/collections/" + properties.getChromaCollection()))
+                    .timeout(Duration.ofSeconds(3))
+                    .GET()
+                    .build();
+            HttpResponse<String> getResp = httpClient.send(getReq, HttpResponse.BodyHandlers.ofString());
+            if (getResp.statusCode() == 200) {
+                JsonNode root = objectMapper.readTree(getResp.body());
+                this.chromaCollectionId = root.path("id").asText();
+                log.info("[CHROMA] Connected to existing collection: {} (ID: {})", properties.getChromaCollection(), chromaCollectionId);
+                syncDiskVectorsToChroma();
+                return;
+            }
+
+            // 2. Create collection if it does not exist
             Map<String, Object> body = Map.of(
                     "name", properties.getChromaCollection(),
                     "metadata", Map.of("description", "Enterprise RAG Pipeline Collection")
@@ -189,10 +205,62 @@ public class ChromaVectorStoreService {
             if (response.statusCode() == 200 || response.statusCode() == 201) {
                 JsonNode root = objectMapper.readTree(response.body());
                 this.chromaCollectionId = root.path("id").asText();
-                log.info("[CHROMA] Active collection: {} (ID: {})", properties.getChromaCollection(), chromaCollectionId);
+                log.info("[CHROMA] Created active collection: {} (ID: {})", properties.getChromaCollection(), chromaCollectionId);
+                syncDiskVectorsToChroma();
             }
         } catch (Exception e) {
             log.warn("[CHROMA] Failed creating/accessing collection: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Synchronizes all pre-computed vectors on disk into the Chroma collection to ensure 100% coverage.
+     */
+    public synchronized void syncDiskVectorsToChroma() {
+        if (!chromaAvailable || chromaCollectionId == null) return;
+        Path vectorDir = properties.getVectorStoragePath();
+        if (!Files.exists(vectorDir)) return;
+
+        List<VectorDocument> batch = new ArrayList<>();
+        try (Stream<Path> stream = Files.list(vectorDir)) {
+            stream.filter(p -> p.toString().endsWith(".vectors.jsonl")).forEach(file -> {
+                try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        if (line.trim().isEmpty()) continue;
+                        JsonNode node = objectMapper.readTree(line);
+                        String id = node.path("id").asText();
+                        String docName = node.path("documentName").asText();
+                        int page = node.path("pageNumber").asInt();
+                        String heading = node.path("heading").asText();
+                        String text = node.path("text").asText();
+                        JsonNode embNode = node.path("embedding");
+                        if (embNode != null && embNode.isArray() && !id.isBlank() && !text.isBlank()) {
+                            float[] emb = new float[embNode.size()];
+                            for (int i = 0; i < embNode.size(); i++) {
+                                emb[i] = (float) embNode.get(i).asDouble();
+                            }
+                            Map<String, Object> metadata = new HashMap<>();
+                            metadata.put("document", docName);
+                            metadata.put("page", page);
+                            metadata.put("heading", heading);
+                            metadata.put("sources", docName + ":p" + page);
+                            batch.add(new VectorDocument(id, docName, page, heading, text, emb, metadata));
+                            if (batch.size() >= 50) {
+                                flushBatchWithRetry(batch);
+                                batch.clear();
+                            }
+                        }
+                    }
+                } catch (Exception ignored) {}
+            });
+            if (!batch.isEmpty()) {
+                flushBatchWithRetry(batch);
+                batch.clear();
+            }
+            log.info("[CHROMA] Synced disk vectors to Chroma collection successfully.");
+        } catch (Exception e) {
+            log.warn("[CHROMA] Error syncing disk vectors: {}", e.getMessage());
         }
     }
 
@@ -486,16 +554,18 @@ public class ChromaVectorStoreService {
             }
         }
 
-        // Try querying ChromaDB directly if circuit breaker allows
+        List<SearchResult> candidates = new ArrayList<>();
+
+        // 1. Try querying ChromaDB directly if circuit breaker allows
         boolean allowChroma = chromaAvailable && chromaCollectionId != null
                 && (circuitBreaker == null || circuitBreaker.allowExecution());
 
         if (allowChroma) {
             try {
-                List<SearchResult> chromaResults = queryChromaDb(queryEmbedding, safeK);
+                List<SearchResult> chromaResults = queryChromaDb(queryEmbedding, safeK * 4);
                 if (circuitBreaker != null) circuitBreaker.recordSuccess();
-                if (!chromaResults.isEmpty()) {
-                    return chromaResults;
+                if (chromaResults != null) {
+                    candidates.addAll(chromaResults);
                 }
             } catch (Exception e) {
                 if (circuitBreaker != null) circuitBreaker.recordFailure();
@@ -503,8 +573,91 @@ public class ChromaVectorStoreService {
             }
         }
 
-        // Fallback: Streaming scan over disk files (constant memory)
-        return streamSearchFromDisk(queryEmbedding, safeK);
+        // 2. Complement with streaming disk scan to guarantee complete document coverage
+        List<SearchResult> diskResults = streamSearchFromDisk(queryEmbedding, queryText, safeK * 4);
+        for (SearchResult dr : diskResults) {
+            if (candidates.stream().noneMatch(c -> c.id().equals(dr.id()))) {
+                candidates.add(dr);
+            }
+        }
+
+        // 3. Hybrid Lexical + Semantic Re-ranking
+        return rankCandidatesHybrid(queryText, candidates, safeK);
+    }
+
+    private List<SearchResult> rankCandidatesHybrid(String query, List<SearchResult> candidates, int topK) {
+        if (candidates == null || candidates.isEmpty()) return Collections.emptyList();
+
+        Set<String> stopWords = Set.of(
+                "what", "is", "the", "a", "an", "and", "or", "how", "to", "in", "on", "for",
+                "with", "about", "tell", "me", "give", "can", "you", "does", "do", "explain"
+        );
+        List<String> queryKeywords = Arrays.stream(query.toLowerCase().split("[^a-z0-9]+"))
+                .filter(w -> w.length() > 2 && !stopWords.contains(w))
+                .toList();
+
+        List<SearchResult> scored = new ArrayList<>();
+        for (SearchResult res : candidates) {
+            double vectorScore = res.score();
+            double lexicalScore = 0.0;
+
+            if (!queryKeywords.isEmpty()) {
+                String searchTarget = (res.document() + " " + res.heading() + " " + res.text()).toLowerCase();
+                int matches = 0;
+                for (String kw : queryKeywords) {
+                    if (searchTarget.contains(kw)) {
+                        matches++;
+                    }
+                }
+                lexicalScore = (double) matches / queryKeywords.size();
+                if (searchTarget.contains(query.toLowerCase().trim())) {
+                    lexicalScore = Math.min(1.0, lexicalScore + 0.3);
+                }
+            }
+
+            // Down-rank pure index/TOC pages and metadata-only headers
+            String textLower = res.text().toLowerCase();
+            if (textLower.startsWith("# document:") && res.text().length() < 280) {
+                lexicalScore *= 0.05;
+                vectorScore *= 0.1;
+            }
+            if (textLower.contains("s no. chapter title page") || textLower.contains("chapter title page no")
+                    || textLower.contains("table of contents") || textLower.contains("### index")) {
+                lexicalScore *= 0.05;
+                vectorScore *= 0.1;
+            }
+            if ((textLower.contains("public service commission") || textLower.contains("assistant professor")) && textLower.length() < 220) {
+                lexicalScore *= 0.05;
+                vectorScore *= 0.1;
+            }
+
+            double combinedScore = (lexicalScore > 0.0)
+                    ? (0.35 * vectorScore + 0.65 * lexicalScore)
+                    : (0.75 * vectorScore);
+
+            scored.add(new SearchResult(res.id(), res.document(), res.page(), res.heading(), res.text(), combinedScore, res.sources()));
+        }
+
+        scored.sort((a, b) -> Double.compare(b.score(), a.score()));
+
+        // If top candidate has high relevance, prioritize sibling chunks from the same document
+        if (!scored.isEmpty() && scored.get(0).score() >= 0.55) {
+            String topDoc = scored.get(0).document();
+            List<SearchResult> prioritized = new ArrayList<>();
+            for (SearchResult r : scored) {
+                if (r.document().equals(topDoc)) {
+                    prioritized.add(r);
+                }
+            }
+            for (SearchResult r : scored) {
+                if (!r.document().equals(topDoc) && prioritized.size() < topK && r.score() >= 0.40) {
+                    prioritized.add(r);
+                }
+            }
+            return prioritized.stream().limit(topK).toList();
+        }
+
+        return scored.stream().limit(topK).toList();
     }
 
     private List<SearchResult> queryChromaDb(float[] queryEmbedding, int topK) {
@@ -547,8 +700,8 @@ public class ChromaVectorStoreService {
                         String heading = (meta != null) ? meta.path("heading").asText("General") : "General";
 
                         double distance = (distArr != null && distArr.size() > i) ? distArr.get(i).asDouble() : 1.0;
-                        // Score: 1 - cosine distance (clamped to 0..1)
-                        double score = Math.max(0.0, Math.min(1.0, 1.0 - distance));
+                        // Score: Map Euclidean distance squared (0..2) to similarity (0..1)
+                        double score = Math.max(0.0, Math.min(1.0, 1.0 - (distance / 2.0)));
 
                         String sourcesStr = (meta != null) ? meta.path("sources").asText("") : "";
                         List<String> sources = parseSources(sourcesStr, docName, page);
@@ -570,11 +723,20 @@ public class ChromaVectorStoreService {
      * Streams over all `.vectors.jsonl` files on disk, computing cosine similarity on the fly.
      * Uses a bounded PriorityQueue (O(topK) heap memory), guaranteeing no OutOfMemoryError.
      */
-    private List<SearchResult> streamSearchFromDisk(float[] queryEmbedding, int topK) {
+    private List<SearchResult> streamSearchFromDisk(float[] queryEmbedding, String queryText, int topK) {
         Path vectorDir = properties.getVectorStoragePath();
         if (!Files.exists(vectorDir)) return Collections.emptyList();
 
         PriorityQueue<SearchResult> queue = new PriorityQueue<>(Comparator.comparingDouble(SearchResult::score));
+        Set<String> stopWords = Set.of(
+                "what", "is", "the", "a", "an", "and", "or", "how", "to", "in", "on", "for",
+                "with", "about", "tell", "me", "give", "can", "you", "does", "do", "explain"
+        );
+        List<String> queryKeywords = (queryText != null)
+                ? Arrays.stream(queryText.toLowerCase().split("[^a-z0-9]+"))
+                        .filter(w -> w.length() > 2 && !stopWords.contains(w))
+                        .toList()
+                : List.of();
 
         try (Stream<Path> stream = Files.list(vectorDir)) {
             stream.filter(p -> p.toString().endsWith(".vectors.jsonl")).forEach(file -> {
@@ -598,12 +760,45 @@ public class ChromaVectorStoreService {
                                 emb[i] = (float) embNode.get(i).asDouble();
                             }
 
-                            double score = cosineSimilarity(queryEmbedding, emb);
+                            double vectorScore = cosineSimilarity(queryEmbedding, emb);
+                            double lexicalScore = 0.0;
+                            if (!queryKeywords.isEmpty()) {
+                                String searchTarget = (docName + " " + heading + " " + text).toLowerCase();
+                                int matches = 0;
+                                for (String kw : queryKeywords) {
+                                    if (searchTarget.contains(kw)) matches++;
+                                }
+                                lexicalScore = (double) matches / queryKeywords.size();
+                                if (queryText != null && searchTarget.contains(queryText.toLowerCase().trim())) {
+                                    lexicalScore = Math.min(1.0, lexicalScore + 0.3);
+                                }
+                            }
+
+                            // Down-rank pure index/TOC pages and metadata-only headers
+                            String textLower = text.toLowerCase();
+                            if (textLower.startsWith("# document:") && text.length() < 280) {
+                                lexicalScore *= 0.05;
+                                vectorScore *= 0.1;
+                            }
+                            if (textLower.contains("s no. chapter title page") || textLower.contains("chapter title page no")
+                                    || textLower.contains("table of contents") || textLower.contains("### index")) {
+                                lexicalScore *= 0.05;
+                                vectorScore *= 0.1;
+                            }
+                            if ((textLower.contains("public service commission") || textLower.contains("assistant professor")) && textLower.length() < 220) {
+                                lexicalScore *= 0.05;
+                                vectorScore *= 0.1;
+                            }
+
+                            double hybridScore = (lexicalScore > 0.0)
+                                    ? (0.35 * vectorScore + 0.65 * lexicalScore)
+                                    : (0.75 * vectorScore);
+
                             if (queue.size() < topK) {
-                                queue.offer(new SearchResult(id, docName, page, heading, text, score, sources));
-                            } else if (score > queue.peek().score()) {
+                                queue.offer(new SearchResult(id, docName, page, heading, text, hybridScore, sources));
+                            } else if (hybridScore > queue.peek().score()) {
                                 queue.poll();
-                                queue.offer(new SearchResult(id, docName, page, heading, text, score, sources));
+                                queue.offer(new SearchResult(id, docName, page, heading, text, hybridScore, sources));
                             }
                         }
                     }

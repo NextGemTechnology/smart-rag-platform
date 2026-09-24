@@ -157,13 +157,14 @@ public class RagGenerationService {
     }
 
     private RagAnswer doAskInternal(String query, int topK) {
-        // Retrieve slightly larger candidate pool (topK * 2) so relevance filter can discard boilerplate
-        List<ChromaVectorStoreService.SearchResult> rawResults = vectorStoreService.search(query, topK * 2);
+        int candidatePoolSize = Math.max(topK, 5) * 3;
+        List<ChromaVectorStoreService.SearchResult> rawResults = vectorStoreService.search(query, candidatePoolSize);
 
         // Apply Relevance & Boilerplate Filtering
         List<ChromaVectorStoreService.SearchResult> cleanResults = relevanceFilter.filterRelevantResults(rawResults, query, 0.25);
-        if (cleanResults.size() > topK) {
-            cleanResults = cleanResults.subList(0, topK);
+        int targetK = Math.max(topK, 5);
+        if (cleanResults.size() > targetK) {
+            cleanResults = cleanResults.subList(0, targetK);
         }
 
         if (cleanResults.isEmpty()) {
